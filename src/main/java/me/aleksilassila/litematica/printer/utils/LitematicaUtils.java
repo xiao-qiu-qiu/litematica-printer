@@ -76,8 +76,50 @@ public class LitematicaUtils {
         return false;
     }
 
+    /**
+     * Returns enabled schematic sub-region boxes intersecting the scan box.
+     * The placement manager already indexes these boxes by chunk, so this avoids
+     * iterating the whole interaction cube when most of it is outside schematics.
+     */
+    public static List<PrinterBox> getSchematicBoxes(PrinterBox scanBox) {
+        if (scanBox == null) return Collections.emptyList();
+
+        SchematicPlacementManager manager = DataManager.getSchematicPlacementManager();
+        List<PrinterBox> result = new ArrayList<>();
+        int minChunkX = Math.floorDiv(scanBox.minX, 16);
+        int maxChunkX = Math.floorDiv(scanBox.maxX, 16);
+        int minChunkZ = Math.floorDiv(scanBox.minZ, 16);
+        int maxChunkZ = Math.floorDiv(scanBox.maxZ, 16);
+
+        for (int chunkX = minChunkX; chunkX <= maxChunkX; chunkX++) {
+            for (int chunkZ = minChunkZ; chunkZ <= maxChunkZ; chunkZ++) {
+                for (SchematicPlacementManager.PlacementPart part : manager.getPlacementPartsInChunk(chunkX, chunkZ)) {
+                    SubRegionPlacement subRegion = getSubRegionForPlacementPart(part);
+                    if (subRegion != null && !subRegion.isEnabled()) continue;
+
+                    var partBox = part.getBox();
+                    int minX = Math.max(scanBox.minX, partBox.minX());
+                    int minY = Math.max(scanBox.minY, partBox.minY());
+                    int minZ = Math.max(scanBox.minZ, partBox.minZ());
+                    int maxX = Math.min(scanBox.maxX, partBox.maxX());
+                    int maxY = Math.min(scanBox.maxY, partBox.maxY());
+                    int maxZ = Math.min(scanBox.maxZ, partBox.maxZ());
+                    if (minX > maxX || minY > maxY || minZ > maxZ) continue;
+
+                    PrinterBox clipped = new PrinterBox(minX, minY, minZ, maxX, maxY, maxZ);
+                    clipped.iterationMode = scanBox.iterationMode;
+                    clipped.xIncrement = scanBox.xIncrement;
+                    clipped.yIncrement = scanBox.yIncrement;
+                    clipped.zIncrement = scanBox.zIncrement;
+                    result.add(clipped);
+                }
+            }
+        }
+        return result;
+    }
+
     @Nullable
-    private static SubRegionPlacement getSubRegionForPlacementPart(SchematicPlacementManager.PlacementPart part) {
+    public static SubRegionPlacement getSubRegionForPlacementPart(SchematicPlacementManager.PlacementPart part) {
         SchematicPlacement placement = part.getPlacement();
         String subName = part.getSubRegionName();
         if (placement != null && subName != null) {

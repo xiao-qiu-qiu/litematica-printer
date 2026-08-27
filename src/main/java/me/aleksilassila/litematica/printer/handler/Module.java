@@ -122,7 +122,9 @@ public abstract class Module extends ConfigUtils {
         }
 
         if (box == null) return;
-        if (iteratorManager.tryBuildBox(player, selectionType != null ? selectionType.getOptionListValue() : null)) {
+        if (iteratorManager.tryBuildBox(player,
+                selectionType != null ? selectionType.getOptionListValue() : null,
+                needSchematic)) {
             box.set(iteratorManager.getBox());
             scanState = ScanState.COLLECT;
             scanPlan.reset();

@@ -9,6 +9,7 @@ import me.aleksilassila.litematica.printer.enums.RadiusShapeType;
 import me.aleksilassila.litematica.printer.enums.SelectionType;
 import me.aleksilassila.litematica.printer.printer.PrinterBox;
 import me.aleksilassila.litematica.printer.utils.ConfigUtils;
+import me.aleksilassila.litematica.printer.utils.LitematicaUtils;
 import me.aleksilassila.litematica.printer.utils.PlayerUtils;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
@@ -17,7 +18,11 @@ import net.minecraft.core.Vec3i;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
+import java.util.PriorityQueue;
+import java.util.Set;
 
 /**
  * 迭代管理器 — 从 Module 中分离出的迭代相关逻辑。
@@ -45,6 +50,7 @@ public class IteratorManager {
     private SelectionType lastSelectionType = null;
     @Nullable
     private PrinterBox lastBox;
+    private boolean useSchematicCandidates;
 
     private boolean needsRebuild;
     private boolean dirtyIterator;
@@ -57,7 +63,7 @@ public class IteratorManager {
     /**
      * 根据玩家位置和配置重建 PrinterBox，返回是否需要重置扫描状态。
      */
-    public boolean tryBuildBox(LocalPlayer player, @Nullable Object selectionTypeObj) {
+    public boolean tryBuildBox(LocalPlayer player, @Nullable Object selectionTypeObj, boolean needSchematic) {
         BlockPos eyeBP = new BlockPos(new Vec3i(
                 (int) Math.round(player.getX()),
                 (int) Math.round(player.getEyeY()),
@@ -76,6 +82,7 @@ public class IteratorManager {
         int layerBelow = layerRange.getLayerBelow();
 
         SelectionType selectionType = selectionTypeObj instanceof SelectionType s ? s : null;
+        boolean useSchematicCandidates = needSchematic;
 
         boolean needRebuild = this.box == null
                 || !this.box.equals(lastBox)
@@ -89,7 +96,8 @@ public class IteratorManager {
                 || layerBelow != lastLayerBelow
                 || layerAxis != lastLayerAxis
                 || layerMode != lastLayerMode
-                || selectionType != lastSelectionType;
+                || selectionType != lastSelectionType
+                || useSchematicCandidates != this.useSchematicCandidates;
 
         if (needRebuild) {
             lastEyePos = eyeBP;
@@ -102,6 +110,7 @@ public class IteratorManager {
             lastLayerAxis = layerAxis;
             lastLayerMode = layerMode;
             lastSelectionType = selectionType;
+            this.useSchematicCandidates = useSchematicCandidates;
 
             int minX = (int) Math.floor(player.getX() - effectiveRange);
             int maxX = (int) Math.ceil(player.getX() + effectiveRange);
@@ -196,7 +205,7 @@ public class IteratorManager {
         if (box == null) return null;
 
         if (cachedIterator == null) {
-            cachedIterator = box.iterator();
+            cachedIterator = createIterator();
             dirtyIterator = false;
         }
 
@@ -218,10 +227,25 @@ public class IteratorManager {
     public boolean hasNext() {
         if (box == null) return false;
         if (cachedIterator == null) {
-            cachedIterator = box.iterator();
+            cachedIterator = createIterator();
             dirtyIterator = false;
         }
         return cachedIterator.hasNext();
+    }
+
+    private Iterator<BlockPos> createIterator() {
+        if (!useSchematicCandidates) {
+            return box.iterator();
+        }
+
+        List<PrinterBox> schematicBoxes = LitematicaUtils.getSchematicBoxes(box);
+        if (schematicBoxes.isEmpty()) {
+            return List.<BlockPos>of().iterator();
+        }
+        if (schematicBoxes.size() == 1) {
+            return schematicBoxes.get(0).iterator();
+        }
+        return new SchematicBoxIterator(schematicBoxes);
     }
 
     public void reset() {
@@ -244,5 +268,106 @@ public class IteratorManager {
     public void setDirtyRegionIterator(Iterator<BlockPos> dirtyIter) {
         this.cachedIterator = dirtyIter;
         this.dirtyIterator = false;
+    }
+
+    /**
+     * Iterates the projection boxes while removing duplicates from overlapping placements.
+     */
+    private static final class SchematicBoxIterator implements Iterator<BlockPos> {
+        private final PriorityQueue<Cursor> queue;
+        private final Set<Long> seen = new HashSet<>();
+        private BlockPos next;
+
+        private SchematicBoxIterator(List<PrinterBox> boxes) {
+            PrinterBox order = boxes.get(0);
+            this.queue = new PriorityQueue<>((left, right) -> comparePositions(left.current, right.current, order));
+            for (PrinterBox box : boxes) {
+                Iterator<BlockPos> iterator = box.iterator();
+                if (iterator.hasNext()) {
+                    queue.add(new Cursor(iterator, iterator.next()));
+                }
+            }
+        }
+
+        @Override
+        public boolean hasNext() {
+            prepareNext();
+            return next != null;
+        }
+
+        @Override
+        public BlockPos next() {
+            prepareNext();
+            if (next == null) throw new java.util.NoSuchElementException();
+            BlockPos result = next;
+            next = null;
+            return result;
+        }
+
+        private void prepareNext() {
+            if (next != null) return;
+            while (!queue.isEmpty()) {
+                Cursor cursor = queue.poll();
+                BlockPos candidate = cursor.current;
+                if (cursor.iterator.hasNext()) {
+                    cursor.current = cursor.iterator.next();
+                    queue.add(cursor);
+                }
+                if (seen.add(candidate.asLong())) {
+                    next = candidate;
+                    return;
+                }
+            }
+        }
+
+        private static int comparePositions(BlockPos left, BlockPos right, PrinterBox order) {
+            return switch (order.iterationMode) {
+                case XYZ -> compareAxes(left, right, order, 0, 1, 2);
+                case XZY -> compareAxes(left, right, order, 0, 2, 1);
+                case YXZ -> compareAxes(left, right, order, 1, 0, 2);
+                case YZX -> compareAxes(left, right, order, 1, 2, 0);
+                case ZXY -> compareAxes(left, right, order, 2, 0, 1);
+                case ZYX -> compareAxes(left, right, order, 2, 1, 0);
+            };
+        }
+
+        private static int compareAxes(BlockPos left, BlockPos right, PrinterBox order,
+                                       int firstAxis, int secondAxis, int thirdAxis) {
+            int result = compareAxis(axisValue(left, firstAxis), axisValue(right, firstAxis), increment(order, firstAxis));
+            if (result != 0) return result;
+            result = compareAxis(axisValue(left, secondAxis), axisValue(right, secondAxis), increment(order, secondAxis));
+            if (result != 0) return result;
+            return compareAxis(axisValue(left, thirdAxis), axisValue(right, thirdAxis), increment(order, thirdAxis));
+        }
+
+        private static int axisValue(BlockPos pos, int axis) {
+            return switch (axis) {
+                case 0 -> pos.getX();
+                case 1 -> pos.getY();
+                default -> pos.getZ();
+            };
+        }
+
+        private static boolean increment(PrinterBox box, int axis) {
+            return switch (axis) {
+                case 0 -> box.xIncrement;
+                case 1 -> box.yIncrement;
+                default -> box.zIncrement;
+            };
+        }
+
+        private static int compareAxis(int left, int right, boolean increment) {
+            return increment ? Integer.compare(left, right) : Integer.compare(right, left);
+        }
+
+        private static final class Cursor {
+            private final Iterator<BlockPos> iterator;
+            private BlockPos current;
+
+            private Cursor(Iterator<BlockPos> iterator, BlockPos current) {
+                this.iterator = iterator;
+                this.current = current;
+            }
+        }
     }
 }
