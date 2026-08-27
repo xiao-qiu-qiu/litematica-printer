@@ -7,6 +7,7 @@ import me.aleksilassila.litematica.printer.config.Configs;
 import me.aleksilassila.litematica.printer.handler.handlers.*;
 import me.aleksilassila.litematica.printer.printer.ActionManager;
 import me.aleksilassila.litematica.printer.printer.MissingMaterialTracker;
+import me.aleksilassila.litematica.printer.printer.PlacementDelayManager;
 import me.aleksilassila.litematica.printer.utils.BreakUtils;
 import me.aleksilassila.litematica.printer.utils.ConfigUtils;
 import me.aleksilassila.litematica.printer.utils.ModUtils;
@@ -36,11 +37,17 @@ public class ModuleManager {
     );
 
     private static boolean lastPrinterEnabled = false;
+    private static boolean takeItOutAwaiting = false;
 
     public static void tick() {
         // If TakeItOut is waiting for a server-side shulker extraction, skip
         // all processing so the printer does not interfere.
-        if (TakeItOutCompat.isAwaitingItem()) return;
+        boolean awaitingItem = TakeItOutCompat.isAwaitingItem();
+        if (takeItOutAwaiting && !awaitingItem) {
+            PlacementDelayManager.INSTANCE.onInventoryOperation();
+        }
+        takeItOutAwaiting = awaitingItem;
+        if (awaitingItem) return;
 
         QuickShulkerUtils.tick();
         if (ModUtils.isRemoteInventoryNextLoaded()) {

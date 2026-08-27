@@ -21,8 +21,10 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 public class BlockUtils {
     @NotNull public static final Minecraft client = Minecraft.getInstance();
@@ -369,11 +371,19 @@ public class BlockUtils {
 
     public static boolean checkObserverChain(SchematicBlockContext start) {
         SchematicBlockContext temp = start;
+        Set<BlockPos> visited = new HashSet<>();
         while (temp.requiredState.getBlock() instanceof ObserverBlock) {
+            // Malformed or cyclic schematics must not stall the printer scan.
+            if (!visited.add(temp.blockPos)) {
+                return false;
+            }
             @Nullable
             Direction tempObserverFacing = temp.getRequiredStateProperty(ObserverBlock.FACING).orElse(null);
+            if (tempObserverFacing == null) {
+                return false;
+            }
             SchematicBlockContext offset = temp.offset(tempObserverFacing);
-            if (tempObserverFacing != null && BlockMatchingType.get(offset) != BlockMatchingType.CORRECT) {
+            if (BlockMatchingType.get(offset) != BlockMatchingType.CORRECT) {
                 return false;
             }
             temp = offset;

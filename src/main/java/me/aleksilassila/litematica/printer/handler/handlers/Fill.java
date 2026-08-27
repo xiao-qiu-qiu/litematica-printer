@@ -41,13 +41,13 @@ public class Fill extends Module {
     }
 
     @Override
-    protected int getTickInterval() {
-        return Configs.Placement.PLACE_INTERVAL.getIntegerValue();
+    protected int getMaxExecutions() {
+        return Configs.Placement.PLACE_BLOCKS_PER_TICK.getIntegerValue();
     }
 
     @Override
-    protected int getMaxExecutions() {
-        return Configs.Placement.PLACE_BLOCKS_PER_TICK.getIntegerValue();
+    protected boolean isPlacementModule() {
+        return true;
     }
 
     @Override
@@ -154,6 +154,11 @@ public class Fill extends Module {
                 }
                 return;
             }
+            if (PlacementDelayManager.INSTANCE.wasInventoryOperationThisTick()) {
+                enterWaiting(blockPos);
+                skipIteration.set(true);
+                return;
+            }
             if (Configs.Placement.FALLING_CHECK.getBooleanValue() &&
                 player.getMainHandItem().getItem() instanceof BlockItem item &&
                 item.getBlock() instanceof FallingBlock block &&
@@ -175,10 +180,14 @@ public class Fill extends Module {
             addHighlight(blockPos, HighlightType.PLACE);
             ActionManager.INSTANCE.setLook(action.getPlayerLook());
             ActionManager.INSTANCE.setNeedWaitModifyLookFromAction(action.getNeedWaitModifyLook());
-            if (ActionManager.INSTANCE.sendQueue(player).needWaitModifyLook){
+            boolean needWait = ActionManager.INSTANCE.sendQueue(player).needWaitModifyLook;
+            if (needWait) {
                 skipIteration.set(true);
             } else {
                 this.setCooldown(blockPos, ConfigUtils.getPlaceCooldown());
+                if (PlacementDelayManager.INSTANCE.isWaitingForPlacement()) {
+                    skipIteration.set(true);
+                }
             }
         }
     }

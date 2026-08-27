@@ -32,13 +32,13 @@ public class FluidRemoval extends Module {
     }
 
     @Override
-    protected int getTickInterval() {
-        return Configs.Placement.PLACE_INTERVAL.getIntegerValue();
+    protected int getMaxExecutions() {
+        return Configs.Placement.PLACE_BLOCKS_PER_TICK.getIntegerValue();
     }
 
     @Override
-    protected int getMaxExecutions() {
-        return Configs.Placement.PLACE_BLOCKS_PER_TICK.getIntegerValue();
+    protected boolean isPlacementModule() {
+        return true;
     }
 
     @Override
@@ -107,13 +107,22 @@ public class FluidRemoval extends Module {
                 }
                 return;
             }
+            if (PlacementDelayManager.INSTANCE.wasInventoryOperationThisTick()) {
+                enterWaiting(blockPos);
+                skipIteration.set(true);
+                return;
+            }
             Action action = new Action().queueAction(blockPos, Direction.UP, false, player);
             addHighlight(blockPos, HighlightType.PLACE);
             ActionManager.INSTANCE.setNeedWaitModifyLookFromAction(action.getNeedWaitModifyLook());
-            if (ActionManager.INSTANCE.sendQueue(player).needWaitModifyLook) {
+            boolean needWait = ActionManager.INSTANCE.sendQueue(player).needWaitModifyLook;
+            if (needWait) {
                 skipIteration.set(true);
             } else {
                 setCooldown(blockPos, ConfigUtils.getPlaceCooldown());
+                if (PlacementDelayManager.INSTANCE.isWaitingForPlacement()) {
+                    skipIteration.set(true);
+                }
             }
         }
     }

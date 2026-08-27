@@ -11,6 +11,7 @@ import me.aleksilassila.litematica.printer.config.Configs;
 import me.aleksilassila.litematica.printer.enums.ShulkerSource;
 import me.aleksilassila.litematica.printer.interfaces.compat.QuickShulkerCompat;
 import me.aleksilassila.litematica.printer.interfaces.compat.TakeItOutCompat;
+import me.aleksilassila.litematica.printer.printer.PlacementDelayManager;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientPacketListener;
@@ -221,6 +222,7 @@ public class QuickShulkerUtils {
         //#endif
 
         container.clicked(slotIndex, button, type, mc.player);
+        PlacementDelayManager.INSTANCE.onInventoryOperation();
     }
 
     public static void pickupSlot(AbstractContainerMenu container, int slotIndex) {
@@ -242,6 +244,7 @@ public class QuickShulkerUtils {
                 1, // 右键
                 ClickType.PICKUP,
                 mc.player);
+        PlacementDelayManager.INSTANCE.onInventoryOperation();
     }
 
     // ========== 潜影盒取物逻辑 ==========
@@ -293,6 +296,7 @@ public class QuickShulkerUtils {
                         // 先拾取潜影盒槽位，再放到目标槽位
                         mc.gameMode.handleInventoryMouseClick(container.containerId, slot.index, 0, ClickType.PICKUP, player);
                         mc.gameMode.handleInventoryMouseClick(container.containerId, containerTarget, 0, ClickType.PICKUP, player);
+                        PlacementDelayManager.INSTANCE.onInventoryOperation();
                         if (activeShulker != null) {
                             activeShulker.updateContents(getContainerContents(container, ownSlots));
                             itemsToReturn.addLast(new ReturnRequest(returnItem, activeShulker));
@@ -326,6 +330,7 @@ public class QuickShulkerUtils {
                 int containerSource = i < 9 ? ownSlots + 27 + i : ownSlots + i - 9;
                 mc.gameMode.handleInventoryMouseClick(container.containerId, containerSource, 0, ClickType.PICKUP, player);
                 mc.gameMode.handleInventoryMouseClick(container.containerId, shulkerSlot, 0, ClickType.PICKUP, player);
+                PlacementDelayManager.INSTANCE.onInventoryOperation();
                 itemsToReturn.removeFirstOccurrence(returnRequest);
                 if (returnRequest.shulker() != null) {
                     returnRequest.shulker().updateContents(getContainerContents(container, ownSlots));

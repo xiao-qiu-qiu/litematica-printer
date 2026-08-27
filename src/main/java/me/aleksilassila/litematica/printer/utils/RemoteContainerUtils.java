@@ -13,6 +13,7 @@ import dev.blinkwhite.remoteinventory.enums.ResultType;
 import dev.blinkwhite.remoteinventory.network.payload.RemoteExchangeResultPayload;
 import dev.blinkwhite.remoteinventory.network.payload.ScanContainerResultPayload;
 import me.aleksilassila.litematica.printer.printer.PrinterBox;
+import me.aleksilassila.litematica.printer.printer.PlacementDelayManager;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.Minecraft;
@@ -283,6 +284,7 @@ public class RemoteContainerUtils {
                 }
             }
         }
+        PlacementDelayManager.INSTANCE.onInventoryOperation();
     }
 
     private static Set<String> resolveContainerBlockIds() {

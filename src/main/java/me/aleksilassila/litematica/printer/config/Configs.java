@@ -190,7 +190,7 @@ public class Configs extends ConfigBuilders implements IConfigHandler {
                 .defaultValue(false)
                 .build();
 
-        // 核心 - 工作间隔
+        // 放置成功后的全局冷却
         public static final ConfigInteger PLACE_INTERVAL = integerValue("placeInterval")
                 .defaultValue(1)
                 .range(0, 20)
@@ -208,6 +208,12 @@ public class Configs extends ConfigBuilders implements IConfigHandler {
                 .range(0, 64)
                 .build();
 
+        // 快捷栏/物品栏操作后的等待
+        public static final ConfigInteger HOTBAR_SWITCH_DELAY = integerValue("hotbarSwitchDelay")
+                .defaultValue(3)
+                .range(0, 64)
+                .build();
+
         // 下落方块检查
         public static final ConfigBoolean FALLING_CHECK = booleanValue("printFallingBlockCheck")
             .defaultValue(true)
@@ -218,6 +224,7 @@ public class Configs extends ConfigBuilders implements IConfigHandler {
                 PLACE_INTERVAL,
                 PLACE_BLOCKS_PER_TICK,
                 PLACE_COOLDOWN,
+                HOTBAR_SWITCH_DELAY,
                 FALLING_CHECK
         );
     }

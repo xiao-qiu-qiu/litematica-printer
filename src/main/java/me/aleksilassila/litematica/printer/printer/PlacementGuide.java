@@ -454,17 +454,21 @@ public class PlacementGuide {
                     // 活塞四周
                     for (Direction direction : Direction.values()) {
                         SchematicBlockContext temp = ctx.offset(direction);
+                        Set<BlockPos> visited = new HashSet<>();
                         while (temp.requiredState.getBlock() instanceof ObserverBlock) {
-                            @Nullable Direction tempObserverFacing = temp.getRequiredStateProperty(ObserverBlock.FACING).orElse(null);
-                            if (tempObserverFacing != null) {
-                                SchematicBlockContext offset = temp.offset(tempObserverFacing);
-                                if (tempObserverFacing == direction) {
-                                    if (BlockMatchingType.get(offset) != BlockMatchingType.CORRECT) {
-                                        return null;
-                                    }
-                                }
-                                temp = offset;
+                            if (!visited.add(temp.blockPos)) {
+                                return null;
                             }
+                            @Nullable Direction tempObserverFacing = temp.getRequiredStateProperty(ObserverBlock.FACING).orElse(null);
+                            if (tempObserverFacing == null) {
+                                return null;
+                            }
+                            SchematicBlockContext offset = temp.offset(tempObserverFacing);
+                            if (tempObserverFacing == direction
+                                    && BlockMatchingType.get(offset) != BlockMatchingType.CORRECT) {
+                                return null;
+                            }
+                            temp = offset;
                         }
                     }
 

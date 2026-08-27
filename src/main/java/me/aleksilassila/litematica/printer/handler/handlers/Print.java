@@ -62,13 +62,13 @@ public class Print extends Module {
     }
 
     @Override
-    protected int getTickInterval() {
-        return Configs.Placement.PLACE_INTERVAL.getIntegerValue();
+    protected int getMaxExecutions() {
+        return Configs.Placement.PLACE_BLOCKS_PER_TICK.getIntegerValue();
     }
 
     @Override
-    protected int getMaxExecutions() {
-        return Configs.Placement.PLACE_BLOCKS_PER_TICK.getIntegerValue();
+    protected boolean isPlacementModule() {
+        return true;
     }
 
     @Override
@@ -116,7 +116,9 @@ public class Print extends Module {
 
     @Override
     public boolean isCorrectBlock(BlockPos pos) {
-        BlockState required = LitematicaUtils.getBlockState(pos);
+        WorldSchematic schematic = SchematicWorldHandler.getSchematicWorld();
+        if (schematic == null) return true;
+        BlockState required = schematic.getBlockState(pos);
         BlockState current = level.getBlockState(pos);
         return BlockMatchingType.get(required, current) == BlockMatchingType.CORRECT;
     }
@@ -201,6 +203,11 @@ public class Print extends Module {
             addHighlight(blockPos, HighlightType.FAILED);
             return;
         }
+        if (PlacementDelayManager.INSTANCE.wasInventoryOperationThisTick()) {
+            enterWaiting(blockPos);
+            skipIteration.set(true);
+            return;
+        }
         boolean useShift;
         if (action.getShift() == null) {
             useShift =
@@ -220,7 +227,7 @@ public class Print extends Module {
         ActionManager.INSTANCE.setLook(action.getPlayerLook());
         ActionManager.INSTANCE.setNeedWaitModifyLookFromAction(action.getNeedWaitModifyLook());
         boolean needWait = ActionManager.INSTANCE.sendQueue(player).needWaitModifyLook;
-        if (needWait || hitModifier != null) {
+        if (needWait || hitModifier != null || PlacementDelayManager.INSTANCE.isWaitingForPlacement()) {
             skipIteration.set(true);
         }
         setCooldown(blockPos, ConfigUtils.getPlaceCooldown());

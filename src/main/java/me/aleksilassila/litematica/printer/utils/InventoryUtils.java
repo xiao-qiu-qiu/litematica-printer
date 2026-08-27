@@ -13,6 +13,7 @@ import lombok.Setter;
 import me.aleksilassila.litematica.printer.config.Configs;
 import me.aleksilassila.litematica.printer.mixin.printer.litematica.EasyPlaceUtilsAccessor;
 import me.aleksilassila.litematica.printer.mixin.printer.litematica.InventoryUtilsAccessor;
+import me.aleksilassila.litematica.printer.printer.PlacementDelayManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.client.player.LocalPlayer;
@@ -96,11 +97,15 @@ public class InventoryUtils {
     }
 
     public static void setHotbarSlot(int slot, Inventory inventory) {
+        boolean changed = getSelectedSlot(inventory) != slot;
         boolean usePacket = Configs.Placement.PRINT_USE_PACKET.getBooleanValue();
         if (usePacket) {
             client.getConnection().send(new ServerboundSetCarriedItemPacket(slot));
         }
         setSelectedSlot(inventory, slot);
+        if (changed) {
+            PlacementDelayManager.INSTANCE.onInventoryOperation();
+        }
     }
 
     /**
@@ -160,6 +165,7 @@ public class InventoryUtils {
             if (EntityUtils.isCreativeMode(player)) {
                 getMainStacks(inventory).set(hotbarSlot, stack.copy());
                 client.gameMode.handleCreativeModeItemAdd(client.player.getMainHandItem(), 36 + hotbarSlot);
+                PlacementDelayManager.INSTANCE.onInventoryOperation();
                 return true;
             }
             EasyPlaceUtilsAccessor.callSetEasyPlaceLastPickBlockTime();
@@ -180,7 +186,9 @@ public class InventoryUtils {
         //$$ boolean b = fi.dy.masa.malilib.util.InventoryUtils.areStacksEqual(stackReference, player.getMainHandItem());
         //#endif
         if (b) {
-            return false;
+            // The selected hotbar slot already holds the requested item.
+            // This is still a successful hand selection, not a failed swap.
+            return true;
         }
 
         int slot = fi.dy.masa.malilib.util.InventoryUtils.findSlotWithItem(player.inventoryMenu, stackReference, true);
@@ -245,6 +253,7 @@ public class InventoryUtils {
                     client.gameMode.handleInventoryMouseClick(player.inventoryMenu.containerId, slot, currentHotbarSlot, ClickType.SWAP, player);
                 }
             }
+            PlacementDelayManager.INSTANCE.onInventoryOperation();
             return true;
         }
         return false;
@@ -282,6 +291,7 @@ public class InventoryUtils {
         if (EntityUtils.isCreativeMode(player)) {
             player.getInventory().setItem(OFFHAND_SLOT_INDEX, stack.copy());
             client.gameMode.handleCreativeModeItemAdd(getOffhandStack(player), OFFHAND_SLOT_INDEX);
+            PlacementDelayManager.INSTANCE.onInventoryOperation();
             return true;
         }
 
@@ -362,6 +372,8 @@ public class InventoryUtils {
                 );
             }
         }
+
+        PlacementDelayManager.INSTANCE.onInventoryOperation();
 
         return true;
     }

@@ -190,7 +190,10 @@ public abstract class Module extends ConfigUtils {
     }
 
     private boolean needsWork(BlockPos pos) {
-        return !isOnCooldown(pos) && canProcessPos(pos) && !isCorrectBlock(pos);
+        if (isOnCooldown(pos) || isCorrectBlock(pos)) {
+            return false;
+        }
+        return canProcessPos(pos);
     }
 
     private boolean collectPhase(int maxExecs) {
@@ -223,6 +226,11 @@ public abstract class Module extends ConfigUtils {
     }
 
     private boolean executeAndReturn(BlockPos pos) {
+        if (isPlacementModule() && PlacementDelayManager.INSTANCE.isWaitingForPlacement()) {
+            enterWaiting(pos);
+            skipIteration.set(true);
+            return true;
+        }
         executeIteration(pos, skipIteration);
         return true;
     }
@@ -231,6 +239,9 @@ public abstract class Module extends ConfigUtils {
                                   java.util.function.Predicate<BlockPos> onPosition, Runnable onComplete) {
         int execCount = 0;
         int timeLimitMs = getIterationTimeLimit();
+        boolean areaCheck = needsAreaCheck();
+        boolean updateGuiInfo = Configs.Core.RENDER_HUD.getBooleanValue()
+                || Configs.Core.DEBUG_OUTPUT.getBooleanValue();
 
         skipIteration.set(false);
         timeLimitExceeded.set(false);
@@ -250,17 +261,26 @@ public abstract class Module extends ConfigUtils {
                 BlockPos pos = nextPos.get();
                 if (pos == null) { onComplete.run(); return false; }
 
-                if (needsAreaCheck() && !isPosInWorkspace(pos)) continue;
+                boolean inWorkspace = true;
+                if (areaCheck) {
+                    inWorkspace = isPosInWorkspace(pos);
+                    if (!inWorkspace) continue;
+                }
 
                 boolean executed = onPosition.test(pos);
                 if (executed) {
                     if (maxExecs > 0 && ++execCount >= maxExecs) return true;
                 }
 
-                currentGuiInfo = new GuiBlockInfo(pos,
-                        level.getBlockState(pos), LitematicaUtils.getBlockState(pos),
-                        PlayerUtils.canInteracted(pos), executed,
-                        isPosInWorkspace(pos) && PlayerUtils.canInteracted(pos));
+                if (updateGuiInfo) {
+                    boolean interacted = PlayerUtils.canInteracted(pos);
+                    if (!areaCheck) {
+                        inWorkspace = isPosInWorkspace(pos);
+                    }
+                    currentGuiInfo = new GuiBlockInfo(pos,
+                            level.getBlockState(pos), LitematicaUtils.getBlockState(pos),
+                            interacted, executed, inWorkspace && interacted);
+                }
             }
         } finally {
             if (timeoutTask != null) timeoutTask.cancel(false);
@@ -269,6 +289,11 @@ public abstract class Module extends ConfigUtils {
     }
 
     private boolean isPosInWorkspace(BlockPos pos) {
+        if (selectionType != null
+                && selectionType.getOptionListValue() == SelectionType.LITEMATICA_RENDER_LAYER
+                && !LitematicaUtils.isPositionWithinRange(pos)) {
+            return false;
+        }
         return needSchematic
                 ? LitematicaUtils.isSchematicBlock(pos)
                 : LitematicaUtils.inSelection(pos);
@@ -299,6 +324,10 @@ public abstract class Module extends ConfigUtils {
 
     protected int getTickInterval() {
         return -1;
+    }
+
+    protected boolean isPlacementModule() {
+        return false;
     }
 
     protected int getMaxExecutions() {

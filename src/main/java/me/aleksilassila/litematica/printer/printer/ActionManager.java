@@ -41,11 +41,8 @@ public class ActionManager {
     }
 
     public void queueClick(@NotNull BlockPos target, @NotNull Direction side, @NotNull Vec3 hitModifier, boolean useShift) {
-        if (Configs.Placement.PLACE_INTERVAL.getIntegerValue() != 0) {
-            if (this.target != null) {
-                System.out.println("Was not ready yet.");
-                return;
-            }
+        if (this.target != null) {
+            return;
         }
         this.target = target;
         this.side = side;
@@ -102,6 +99,7 @@ public class ActionManager {
             boolean localPrediction = !Configs.Placement.PRINT_USE_PACKET.getBooleanValue();
             BlockHitResult blockHitResult = new BlockHitResult(hitVec, side, target, false);
             gameModeExtension.litematica_printer$useItemOn(localPrediction, InteractionHand.MAIN_HAND, blockHitResult);
+            PlacementDelayManager.INSTANCE.onPlacement();
         }
         if (useShift && !wasSneak) {
             setShift(player, false);
