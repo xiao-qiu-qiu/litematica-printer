@@ -249,6 +249,8 @@
   "litematica-printer.config.useRemoteContainer.desc": "When materials are missing from inventory, attempt to retrieve them from containers within the schematic selection area via the Remote Inventory Server mod installed on the server.",
   "litematica-printer.config.workRange": "Work Radius",
   "litematica-printer.config.workRange.desc": "Printer's maximum work radius centered on player (blocks).\n§a0 (default)§r: Auto-uses player's reach (creative §b6§r, survival §b4.5§r, server-enforced).\n§a> 0§r: Custom override (may exceed server limits).\nThis parameter is associated with §6§lIteration Area Shape§r.",
+  "litematica-printer.config.scanRefreshDistance": "Scan Range Refresh Distance",
+  "litematica-printer.config.scanRefreshDistance.desc": "Refreshes the scan range after the player moves this many blocks from the center of the last scan.\nDefault: 0.5 blocks; range: 0.1–16 blocks.\nSmaller values refresh more often while moving and increase scan overhead.\nTakes effect immediately.",
   "litematica-printer.config.workingSwitch": "Work Switch",
   "litematica-printer.config.workingSwitch.desc": "Global switch for printer.",
   "litematica-printer.free_notice": "This mod requires further i18n and l10n. If you do, thank you!",

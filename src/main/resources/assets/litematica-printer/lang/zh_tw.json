@@ -212,6 +212,8 @@
   "litematica-printer.config.iterationTimeLimit.desc": "每遊戲刻迭代方塊的最大時長（毫秒）。\n設為 0 時停用時間限制。\n預設值 10 毫秒可平衡效能與速度，可根據需求調整。",
   "litematica-printer.config.workRange": "工作半徑",
   "litematica-printer.config.workRange.desc": "印表機以玩家為中心的最大工作半徑(方塊)。\n§a0 (預設)§r: 自動使用玩家伸手距離（創造§b6§r，生存§b4.5§r，伺服端強制限制）。\n§a> 0§r: 自訂覆蓋（可能超過伺服端限制）。\n此參數與§6§l迭代區域形狀§r關聯。",
+  "litematica-printer.config.scanRefreshDistance": "掃描範圍刷新距離",
+  "litematica-printer.config.scanRefreshDistance.desc": "玩家距離上次掃描中心移動多少格後刷新掃描範圍。\n預設0.5格，範圍0.1–16格。\n數值越小，移動時刷新越頻繁，也會增加掃描開銷。\n修改後立即生效。",
   "litematica-printer.config.workingSwitch": "工作開關",
   "litematica-printer.config.workingSwitch.desc": "印表機的全域開關。",
   "litematica-printer.free_notice": "此模組需要進一步的國際化和在地化工作。歡迎協助改善！",

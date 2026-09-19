@@ -14,7 +14,6 @@ import me.aleksilassila.litematica.printer.utils.PlayerUtils;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.core.Vec3i;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
@@ -35,8 +34,9 @@ public class IteratorManager {
     private Vec3 eyePos;
     private double effectiveRange;
 
-    private BlockPos lastEyePos;
-    private int lastExpandRange = -1;
+    private Vec3 lastEyePos;
+    private double lastEffectiveRange = -1;
+    private double lastRefreshDistance = -1;
     private int lastLayerMin = Integer.MIN_VALUE;
     private int lastLayerMax = Integer.MIN_VALUE;
     private int lastLayerSingle = Integer.MIN_VALUE;
@@ -62,15 +62,14 @@ public class IteratorManager {
 
     /**
      * 根据玩家位置和配置重建 PrinterBox，返回是否需要重置扫描状态。
+     * 收集尚未进入处理阶段时可暂缓移动刷新；配置变更仍立即刷新。
      */
-    public boolean tryBuildBox(LocalPlayer player, @Nullable Object selectionTypeObj, boolean needSchematic) {
-        BlockPos eyeBP = new BlockPos(new Vec3i(
-                (int) Math.round(player.getX()),
-                (int) Math.round(player.getEyeY()),
-                (int) Math.round(player.getZ())));
-
+    public boolean tryBuildBox(LocalPlayer player, @Nullable Object selectionTypeObj, boolean needSchematic,
+                               boolean allowMovementRefresh) {
+        Vec3 currentEyePos = player.getEyePosition();
         double effectiveRange = ConfigUtils.getEffectiveRange();
-        int currentRange = (int) Math.ceil(effectiveRange);
+        double refreshDistance = Configs.Core.SCAN_REFRESH_DISTANCE.getDoubleValue();
+        RadiusShapeType currentShape = Configs.Core.ITERATOR_SHAPE.getOptionListValue() instanceof RadiusShapeType s ? s : null;
 
         LayerRange layerRange = DataManager.getRenderLayerRange();
         LayerMode layerMode = layerRange.getLayerMode();
@@ -84,11 +83,14 @@ public class IteratorManager {
         SelectionType selectionType = selectionTypeObj instanceof SelectionType s ? s : null;
         boolean useSchematicCandidates = needSchematic;
 
-        boolean needRebuild = this.box == null
+        boolean needRebuild = this.needsRebuild
+                || this.box == null
                 || !this.box.equals(lastBox)
                 || lastEyePos == null
-                || !lastEyePos.closerThan(eyeBP, effectiveRange * 0.4)
-                || lastExpandRange != currentRange
+                || (allowMovementRefresh && lastEyePos.distanceToSqr(currentEyePos) >= refreshDistance * refreshDistance)
+                || Double.compare(lastEffectiveRange, effectiveRange) != 0
+                || Double.compare(lastRefreshDistance, refreshDistance) != 0
+                || shapeType != currentShape
                 || layerMin != lastLayerMin
                 || layerMax != lastLayerMax
                 || layerSingle != lastLayerSingle
@@ -99,9 +101,15 @@ public class IteratorManager {
                 || selectionType != lastSelectionType
                 || useSchematicCandidates != this.useSchematicCandidates;
 
+        // 范围筛选始终使用本 tick 的眼睛位置，不依赖扫描盒是否重建。
+        this.eyePos = currentEyePos;
+        this.effectiveRange = effectiveRange;
+        this.shapeType = currentShape;
+
         if (needRebuild) {
-            lastEyePos = eyeBP;
-            lastExpandRange = currentRange;
+            lastEyePos = currentEyePos;
+            lastEffectiveRange = effectiveRange;
+            lastRefreshDistance = refreshDistance;
             lastLayerMin = layerMin;
             lastLayerMax = layerMax;
             lastLayerSingle = layerSingle;
@@ -168,10 +176,6 @@ public class IteratorManager {
             box.xIncrement = !Configs.Core.X_REVERSE.getBooleanValue();
             box.yIncrement = !Configs.Core.Y_REVERSE.getBooleanValue();
             box.zIncrement = !Configs.Core.Z_REVERSE.getBooleanValue();
-
-            this.shapeType = Configs.Core.ITERATOR_SHAPE.getOptionListValue() instanceof RadiusShapeType s ? s : null;
-            this.eyePos = player.getEyePosition();
-            this.effectiveRange = effectiveRange;
 
             cachedIterator = null;
             dirtyIterator = true;

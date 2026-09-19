@@ -249,6 +249,8 @@
   "litematica-printer.config.useRemoteContainer.desc": "囊缺材時，從投影選區內之器取。需伺服裝 Remote Inventory Server。",
   "litematica-printer.config.workRange": "工半徑",
   "litematica-printer.config.workRange.desc": "印機以玩家為心之最大工徑(方塊)。\n§a0 (預)§r: 自動用玩家手長（創§b6§r，生§b4.5§r，伺服強限）。\n§a> 0§r: 自定覆蓋（或超伺服限）。\n此參與§6§l迭代形§r關。",
+  "litematica-printer.config.scanRefreshDistance": "掃描域刷新距離",
+  "litematica-printer.config.scanRefreshDistance.desc": "玩家離上次掃描中心移幾格後，刷新掃描域。\n預0.5格，範0.1–16格。\n數愈小，移時刷新愈頻，亦增掃描開銷。\n改後即效。",
   "litematica-printer.config.workingSwitch": "工開關",
   "litematica-printer.config.workingSwitch.desc": "印機之總開關。",
   "litematica-printer.free_notice": "此模於 GitHub 開源免費，若自費購請自退。",

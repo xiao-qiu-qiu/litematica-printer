@@ -75,6 +75,8 @@ public abstract class Module extends ConfigUtils {
     private ScanState scanState = ScanState.COLLECT;
 
     private Iterator<BlockPos> processIter = null;
+    // 小刷新距离下也让一次收集进入处理阶段，避免移动时反复丢弃扫描结果。
+    private boolean collectionAwaitingProcess = false;
 
     @Nullable
     private BlockPos waitingPos = null;
@@ -124,7 +126,7 @@ public abstract class Module extends ConfigUtils {
         if (box == null) return;
         if (iteratorManager.tryBuildBox(player,
                 selectionType != null ? selectionType.getOptionListValue() : null,
-                needSchematic)) {
+                needSchematic, !collectionAwaitingProcess)) {
             box.set(iteratorManager.getBox());
             scanState = ScanState.COLLECT;
             scanPlan.reset();
@@ -192,13 +194,14 @@ public abstract class Module extends ConfigUtils {
     }
 
     private boolean needsWork(BlockPos pos) {
-        if (isOnCooldown(pos) || isCorrectBlock(pos)) {
+        if (!PlayerUtils.canInteracted(pos) || isOnCooldown(pos) || isCorrectBlock(pos)) {
             return false;
         }
         return canProcessPos(pos);
     }
 
     private boolean collectPhase(int maxExecs) {
+        collectionAwaitingProcess = true;
         return iteratePhase(0,
                 iteratorManager::next,
                 pos -> needsWork(pos) && collectAndReturn(pos),
@@ -210,6 +213,7 @@ public abstract class Module extends ConfigUtils {
     }
 
     private boolean processPhase(int maxExecs) {
+        collectionAwaitingProcess = false;
         if (processIter == null) processIter = scanPlan.createFlatIterator();
         return iteratePhase(maxExecs,
                 () -> processIter.hasNext() ? processIter.next() : null,
@@ -307,6 +311,7 @@ public abstract class Module extends ConfigUtils {
     }
 
     public void resetScanState() {
+        collectionAwaitingProcess = false;
         scanState = ScanState.COLLECT;
         scanPlan.reset();
         processIter = null;

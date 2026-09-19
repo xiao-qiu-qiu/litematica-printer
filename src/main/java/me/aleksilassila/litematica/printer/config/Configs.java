@@ -97,6 +97,12 @@ public class Configs extends ConfigBuilders implements IConfigHandler {
                 .range(0, 256)
                 .build();
 
+        // 移动触发扫描范围刷新的距离（格）
+        public static final ConfigDouble SCAN_REFRESH_DISTANCE = floatValue("scanRefreshDistance")
+                .defaultValue(0.5)
+                .range(0.1, 16)
+                .build();
+
         // 迭代占用时长（毫秒）
         public static final ConfigInteger ITERATION_TIME_LIMIT = integerValue("iterationTimeLimit")
                 .defaultValue(8)
@@ -167,6 +173,7 @@ public class Configs extends ConfigBuilders implements IConfigHandler {
         public static final ImmutableList<IConfigBase> OPTIONS = ImmutableList.of(
                 WORK_SWITCH,
                 WORK_RANGE,
+                SCAN_REFRESH_DISTANCE,
                 ITERATION_TIME_LIMIT,
                 RENDER_HUD,
                 MISSING_MATERIAL_HUD,

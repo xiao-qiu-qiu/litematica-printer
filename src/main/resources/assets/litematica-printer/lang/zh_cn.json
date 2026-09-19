@@ -249,6 +249,8 @@
   "litematica-printer.config.useRemoteContainer.desc": "当背包缺少材料时，尝试从投影选区内的容器中获取材料。需要服务端安装 Remote Inventory Server 模组。",
   "litematica-printer.config.workRange": "工作半径",
   "litematica-printer.config.workRange.desc": "打印机以玩家为中心的最大工作半径(方块)。\n§a0 (默认)§r: 自动使用玩家手长（创造§b6§r，生存§b4.5§r，服务端强制限制）。\n§a> 0§r: 自定义覆盖（可能超过服务端限制）。\n此参数与§6§l迭代区域形状§r关联。",
+  "litematica-printer.config.scanRefreshDistance": "扫描范围刷新距离",
+  "litematica-printer.config.scanRefreshDistance.desc": "玩家距离上次扫描中心移动多少格后刷新扫描范围。\n默认0.5格，范围0.1–16格。\n数值越小，移动时刷新越频繁，也会增加扫描开销。\n修改后立即生效。",
   "litematica-printer.config.workingSwitch": "工作开关",
   "litematica-printer.config.workingSwitch.desc": "打印机的全局开关。",
   "litematica-printer.free_notice": "此模组在GitHub上开源免费，如从收费渠道购买请自行退款",
