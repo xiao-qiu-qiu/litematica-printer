@@ -62,10 +62,8 @@ public class IteratorManager {
 
     /**
      * 根据玩家位置和配置重建 PrinterBox，返回是否需要重置扫描状态。
-     * 收集尚未进入处理阶段时可暂缓移动刷新；配置变更仍立即刷新。
      */
-    public boolean tryBuildBox(LocalPlayer player, @Nullable Object selectionTypeObj, boolean needSchematic,
-                               boolean allowMovementRefresh) {
+    public boolean tryBuildBox(LocalPlayer player, @Nullable Object selectionTypeObj, boolean needSchematic) {
         Vec3 currentEyePos = player.getEyePosition();
         double effectiveRange = ConfigUtils.getEffectiveRange();
         double refreshDistance = Configs.Core.SCAN_REFRESH_DISTANCE.getDoubleValue();
@@ -87,7 +85,7 @@ public class IteratorManager {
                 || this.box == null
                 || !this.box.equals(lastBox)
                 || lastEyePos == null
-                || (allowMovementRefresh && lastEyePos.distanceToSqr(currentEyePos) >= refreshDistance * refreshDistance)
+                || lastEyePos.distanceToSqr(currentEyePos) >= refreshDistance * refreshDistance
                 || Double.compare(lastEffectiveRange, effectiveRange) != 0
                 || Double.compare(lastRefreshDistance, refreshDistance) != 0
                 || shapeType != currentShape
