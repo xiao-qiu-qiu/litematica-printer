@@ -51,6 +51,10 @@ public class ActionManager {
     }
 
     public ActionManager sendQueue(LocalPlayer player) {
+        return sendQueue(player, !Configs.Placement.PRINT_USE_PACKET.getBooleanValue());
+    }
+
+    public ActionManager sendQueue(LocalPlayer player, boolean localPrediction) {
         if (target == null || side == null || hitModifier == null) {
             clearQueue();
             return this;
@@ -96,7 +100,6 @@ public class ActionManager {
         }
         MultiPlayerGameModeExtension gameModeExtension = (MultiPlayerGameModeExtension) Reference.MINECRAFT.gameMode;
         if (gameModeExtension != null) {
-            boolean localPrediction = !Configs.Placement.PRINT_USE_PACKET.getBooleanValue();
             BlockHitResult blockHitResult = new BlockHitResult(hitVec, side, target, false);
             gameModeExtension.litematica_printer$useItemOn(localPrediction, InteractionHand.MAIN_HAND, blockHitResult);
             PlacementDelayManager.INSTANCE.onPlacement();

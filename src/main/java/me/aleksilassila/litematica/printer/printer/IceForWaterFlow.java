@@ -18,7 +18,7 @@ public final class IceForWaterFlow {
         BREAK_ICE_AND_WAIT,
         /** 正在等待水生成，未超时 → 继续等待 */
         KEEP_WAITING,
-        /** 等待超过 maxWaitTicks 仍无水 → 清除标记，由调用方转入冷却退避，避免无限循环 */
+        /** 等待超过 maxWaitTicks 仍无水 → 停止本次打印，避免重放冰覆盖迟到的水源 */
         WAIT_TIMEOUT,
         /** 目标位置已有纯水源（或水刚生成）→ 放置含水方块（清除等待） */
         PLACE_BLOCK,
@@ -45,7 +45,7 @@ public final class IceForWaterFlow {
         PLACE_ICE,
         /** 目标位置已有纯水源 → 返回放置含水方块 Action（直接放入水中） */
         PLACE_BLOCK,
-        /** 当前是冰块 → 入队挖掘并返回占位 Action（保证 canProcessPos 通过） */
+        /** 当前是冰块 → 返回占位 Action，由实际执行阶段安排挖掘 */
         QUEUE_ICE_BREAK,
         /** 下方禁止/无法放冰 → 跳过 */
         SKIP
@@ -55,7 +55,7 @@ public final class IceForWaterFlow {
             boolean isIce, boolean stateIsMissing, boolean belowForbidden, boolean isSurvivalMode) {
         if (!featureEnabled) return BuildDecision.NORMAL;
         if (matchesWaterRequest) return BuildDecision.PLACE_BLOCK;
-        if (isIce) return BuildDecision.QUEUE_ICE_BREAK;
+        if (isIce) return isSurvivalMode ? BuildDecision.QUEUE_ICE_BREAK : BuildDecision.SKIP;
         if (stateIsMissing) {
             if (!isSurvivalMode || belowForbidden) return BuildDecision.SKIP;
             return BuildDecision.PLACE_ICE;

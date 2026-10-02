@@ -8,6 +8,7 @@ import me.aleksilassila.litematica.printer.enums.MiningFilterType;
 import me.aleksilassila.litematica.printer.mixin.extension.BlockBreakResult;
 import me.aleksilassila.litematica.printer.mixin.extension.MultiPlayerGameModeExtension;
 import me.aleksilassila.litematica.printer.printer.SchematicBlockContext;
+import me.aleksilassila.litematica.printer.printer.IceForWaterBreakTask;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.Minecraft;
@@ -29,6 +30,7 @@ public class BreakUtils {
 
     private final Queue<BlockPos> breakQueue = new LinkedList<>();
     private final Set<BlockPos> breakSet = new HashSet<>(); // O(1) 查询伴侣
+    private final IceForWaterBreakTask iceBreakTask = new IceForWaterBreakTask();
     private BlockPos breakPos;
 
     private BreakUtils() {}
@@ -77,9 +79,16 @@ public class BreakUtils {
     }
 
     public void add(BlockPos pos) {
-        if (pos == null) return;
-        breakQueue.add(pos);
-        breakSet.add(pos);
+        if (pos == null || isBreaking(pos) || !breakSet.add(pos.immutable())) return;
+        breakQueue.add(pos.immutable());
+    }
+
+    public void addIce(BlockPos pos) {
+        iceBreakTask.start(pos);
+    }
+
+    public void cancelIceBreak() {
+        iceBreakTask.clear();
     }
 
     public void add(SchematicBlockContext ctx) {
@@ -88,11 +97,11 @@ public class BreakUtils {
     }
 
     public boolean inQueue(BlockPos pos) {
-        return breakSet.contains(pos);
+        return breakSet.contains(pos) || (pos != null && pos.equals(iceBreakTask.getPos()));
     }
 
     public boolean isBreaking(BlockPos pos) {
-        return pos != null && pos.equals(breakPos);
+        return pos != null && (pos.equals(breakPos) || pos.equals(iceBreakTask.getPos()));
     }
 
     public boolean inQueue(SchematicBlockContext ctx) {
@@ -101,6 +110,7 @@ public class BreakUtils {
 
     public void preprocess() {
         if (!ConfigUtils.isPrinterEnable()) {
+            iceBreakTask.clear();
             if (!breakQueue.isEmpty()) {
                 breakQueue.clear();
                 breakSet.clear();
@@ -112,13 +122,17 @@ public class BreakUtils {
     }
 
     public boolean isNeedHandle() {
-        return !breakQueue.isEmpty() || breakPos != null;
+        return !breakQueue.isEmpty() || breakPos != null || iceBreakTask.getPos() != null;
     }
 
     public void onTick() {
         LocalPlayer player = client.player;
         ClientLevel level = client.level;
         if (player == null || level == null) {
+            return;
+        }
+        if (iceBreakTask.getPos() != null) {
+            iceBreakTask.tick();
             return;
         }
         if (breakPos == null && breakQueue.isEmpty()) {

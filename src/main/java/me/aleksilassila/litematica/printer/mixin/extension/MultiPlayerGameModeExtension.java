@@ -14,6 +14,8 @@ public interface MultiPlayerGameModeExtension {
 
     BlockBreakResult litematica_printer$continueDestroyBlock(boolean localPrediction, BlockPos blockPos, Direction direction);
 
+    void litematica_printer$syncSelectedSlot();
+
     void litematica_printer$startPrediction(PredictiveAction predictiveAction);
 
     BlockPos litematica_printer$destroyBlockPos();

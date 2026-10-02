@@ -82,20 +82,21 @@ public class PlacementGuide {
             boolean canGenerateWater = mc.gameMode != null && !mc.gameMode.getPlayerMode().isCreative();
             switch (IceForWaterFlow.decideBuildAction(
                     true,
-                    BlockUtils.isWaterSource(ctx.currentState) || BlockUtils.isWaterlogged(ctx.currentState),
-                    ctx.currentState.getBlock() instanceof IceBlock,
+                    BlockUtils.isWaterSource(ctx.currentState),
+                    ctx.currentState.is(Blocks.ICE),
                     state == BlockMatchingType.MISSING_BLOCK,
-                    iceDownCheck(ctx),
+                    iceDownCheck(ctx) || !BlockUtils.isReplaceable(ctx.currentState),
                     canGenerateWater)) {
                 case PLACE_ICE -> {
-                    return new Action().setItem(Items.ICE);
+                    // 冰必须落在目标格，始终点击真实支撑面，避免凭空放置回退到邻格。
+                    return new Action().setItem(Items.ICE).setRequiresSupport();
                 }
                 case PLACE_BLOCK -> {
                     return buildActionMissingBlock(ctx, requiredType, skip);
                 }
                 case QUEUE_ICE_BREAK -> {
-                    if (!BreakUtils.INSTANCE.inQueue(ctx.blockPos)) BreakUtils.INSTANCE.add(ctx.blockPos);
-                    return new Action().setItem(Items.ICE);
+                    // 查询候选位置不产生挖掘副作用，也不要求背包里还剩冰。
+                    return new Action().setItems(new Item[0]);
                 }
                 case SKIP -> {
                     // 创造模式：提示后跳过
@@ -126,10 +127,13 @@ public class PlacementGuide {
     }
 
     private boolean iceDownCheck(SchematicBlockContext ctx) {
-        Block downBlockState = ctx.level.getBlockState(ctx.blockPos.below()).getBlock();
-        return downBlockState == Blocks.COBWEB
-                || downBlockState == Blocks.BAMBOO_SAPLING
-                || downBlockState instanceof LiquidBlock;
+        // 与原版 IceBlock.playerDestroy 保持一致；下方是空气时挖冰不会产水。
+        BlockState below = ctx.level.getBlockState(ctx.blockPos.below());
+        //#if MC >= 12001
+        return !below.blocksMotion() && !below.liquid();
+        //#else
+        //$$ return !below.getMaterial().blocksMotion() && !below.getMaterial().isLiquid();
+        //#endif
     }
 
     /*** 缺失方块：实际位置为空，或当前方块在可替换列表中且启用了替换功能 ***/

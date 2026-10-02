@@ -27,6 +27,15 @@ import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.enchantment.EnchantmentHelper;
+import net.minecraft.world.item.enchantment.Enchantments;
+import net.minecraft.world.level.block.Blocks;
+
+//#if MC >= 12005
+import net.minecraft.tags.ItemTags;
+//#else
+//$$ import net.minecraft.world.item.PickaxeItem;
+//#endif
 
 //#if MC >= 12105
 import net.minecraft.network.HashedStack;
@@ -106,6 +115,53 @@ public class InventoryUtils {
         if (changed) {
             PlacementDelayManager.INSTANCE.onInventoryOperation();
         }
+    }
+
+    /** 优先使用快捷栏里最快的无精准采集镐；没有时保留安全主手或切到普通物品/空槽。 */
+    public static boolean selectIceBreakingTool(LocalPlayer player) {
+        Inventory inventory = player.getInventory();
+        int selected = getSelectedSlot(inventory);
+        int bestSlot = -1;
+        float bestSpeed = -1;
+        // 先比较当前格，相同速度不反复切换。
+        for (int offset = 0; offset < 9; offset++) {
+            int slot = (selected + offset) % 9;
+            ItemStack stack = inventory.getItem(slot);
+            if (hasSilkTouch(stack)) continue;
+            //#if MC >= 12005
+            boolean pickaxe = stack.is(ItemTags.PICKAXES);
+            //#else
+            //$$ boolean pickaxe = stack.getItem() instanceof PickaxeItem;
+            //#endif
+            if (!pickaxe) continue;
+            float speed = PlayerUtils.getBlockBreakingSpeed(player, Blocks.ICE.defaultBlockState(), stack);
+            if (speed > bestSpeed) {
+                bestSpeed = speed;
+                bestSlot = slot;
+            }
+        }
+        if (bestSlot == -1) {
+            if (!hasSilkTouch(player.getMainHandItem())) return true;
+            for (int slot = 0; slot < 9; slot++) {
+                if (!hasSilkTouch(inventory.getItem(slot))) {
+                    bestSlot = slot;
+                    break;
+                }
+            }
+        }
+        if (bestSlot == -1) return false;
+        if (bestSlot != selected) setHotbarSlot(bestSlot, inventory);
+        return true;
+    }
+
+    public static boolean hasSilkTouch(ItemStack stack) {
+        //#if MC > 12006
+        return stack.getEnchantments().keySet().stream()
+                .anyMatch(enchantment -> enchantment.is(Enchantments.SILK_TOUCH)
+                        && EnchantmentHelper.getItemEnchantmentLevel(enchantment, stack) > 0);
+        //#else
+        //$$ return EnchantmentHelper.getItemEnchantmentLevel(Enchantments.SILK_TOUCH, stack) > 0;
+        //#endif
     }
 
     /**
