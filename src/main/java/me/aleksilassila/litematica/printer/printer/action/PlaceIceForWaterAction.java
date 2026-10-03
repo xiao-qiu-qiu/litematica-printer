@@ -1,5 +1,6 @@
 package me.aleksilassila.litematica.printer.printer.action;
 
+import me.aleksilassila.litematica.printer.config.Configs;
 import me.aleksilassila.litematica.printer.printer.ActionManager;
 import me.aleksilassila.litematica.printer.utils.BlockUtils;
 import net.minecraft.client.multiplayer.ClientLevel;
@@ -22,12 +23,15 @@ public final class PlaceIceForWaterAction extends Action {
 
     public PlaceIceForWaterAction() {
         setItem(Items.ICE);
-        setRequiresSupport();
     }
 
     @Override
     public @Nullable Direction getValidSide(ClientLevel world, BlockPos pos) {
         hit = null;
+        // AirPlace 点击目标格本身；液体没有可点击表面，但仍可作为破冰产水的下方方块。
+        if (Configs.Print.PLACE_IN_AIR.getBooleanValue()) {
+            return BlockUtils.isReplaceable(world.getBlockState(pos)) ? Direction.DOWN : null;
+        }
         for (Direction side : SUPPORT_ORDER) {
             BlockPos support = pos.relative(side);
             if (BlockUtils.isReplaceable(world.getBlockState(support))) continue;
@@ -41,6 +45,9 @@ public final class PlaceIceForWaterAction extends Action {
     @Override
     public Action queueAction(@NotNull BlockPos blockPos, @NotNull Direction side,
                               boolean useShift, @NotNull LocalPlayer player) {
+        if (Configs.Print.PLACE_IN_AIR.getBooleanValue()) {
+            return super.queueAction(blockPos, side, useShift, player);
+        }
         if (hit != null) {
             ActionManager.INSTANCE.queueClickAt(blockPos.relative(side), side.getOpposite(), hit, useShift);
         }

@@ -89,7 +89,7 @@ public class PlacementGuide {
                     iceDownCheck(ctx) || !BlockUtils.isReplaceable(ctx.currentState),
                     canGenerateWater)) {
                 case PLACE_ICE -> {
-                    // 冰必须落在目标格，始终点击真实支撑面，避免凭空放置回退到邻格。
+                    // 临时冰遵循凭空放置开关；关闭时按真实支撑形状选择点击面。
                     return new PlaceIceForWaterAction();
                 }
                 case PLACE_BLOCK -> {
