@@ -162,6 +162,9 @@ public class Print extends Module {
         Item[] items = action.getRequiredItems(ctx.requiredState.getBlock());
         if (InventoryUtils.hasAnyRequiredItem(player, items)) return true;
 
+        // 分类筛选稍后才会锁定材料；提前只读检查，避免给被跳过的候选取物。
+        if (!isCycleItemAllowed(items) || action.getValidSide(level, pos) == null) return false;
+
         // 实际补料才进入处理/等待状态，单纯缺料不占用本轮执行次数和黄框。
         waitingForMaterials = RemoteContainerUtils.hasPendingExchange()
                 || QuickShulkerUtils.isOpenHandler() || TakeItOutCompat.isAwaitingItem()

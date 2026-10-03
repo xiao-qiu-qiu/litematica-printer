@@ -231,13 +231,19 @@ public abstract class Module extends ConfigUtils {
 
     private boolean isCycleItemMatch(BlockPos pos) {
         Item[] items = getRequiredItems(pos);
+        if (!isCycleItemAllowed(items)) return false;
         Item item = items != null && items.length > 0 ? items[0] : null;
-        if (item == null) return true; // 无物品需求的位置始终处理（对应旧 noItemPositions）
         if (currentCycleItem == null) {
             currentCycleItem = item; // 锁定本轮首个所需物品
-            return true;
         }
-        return item.equals(currentCycleItem);
+        return true;
+    }
+
+    /** 只检查本轮分类，不锁定材料；可在发起补料等副作用前使用。 */
+    protected boolean isCycleItemAllowed(@Nullable Item[] items) {
+        if (!Configs.Core.CLASSIFY_BY_BLOCK.getBooleanValue()) return true;
+        Item item = items != null && items.length > 0 ? items[0] : null;
+        return item == null || currentCycleItem == null || item.equals(currentCycleItem);
     }
 
     /**
