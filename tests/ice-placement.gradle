@@ -1,0 +1,22 @@
+// Run with JDK 25: gradlew -I tests/ice-placement.gradle :26.1.2:icePlacementRegression :26.2:icePlacementRegression
+gradle.beforeProject { project ->
+    if (project.name in ['26.1.2', '26.2']) {
+        project.pluginManager.withPlugin('java') {
+            def classes = project.layout.buildDirectory.dir('ice-placement-regression')
+            // Geometry uses no game launcher or native renderer libraries.
+            def geometryClasspath = project.sourceSets.main.output + project.sourceSets.main.compileClasspath
+            def compile = project.tasks.register('compileIcePlacementRegression', JavaCompile) {
+                dependsOn project.tasks.named('classes')
+                source project.rootProject.file('tests/IcePlacementHitRegression.java')
+                classpath = geometryClasspath
+                destinationDirectory = classes
+                options.encoding = 'UTF-8'
+            }
+            project.tasks.register('icePlacementRegression', JavaExec) {
+                dependsOn compile
+                classpath = project.files(classes) + geometryClasspath
+                mainClass = 'IcePlacementHitRegression'
+            }
+        }
+    }
+}

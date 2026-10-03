@@ -29,6 +29,8 @@ public class ActionManager {
     public BlockPos target;
     public Direction side;
     public Vec3 hitModifier;
+    @Nullable
+    private Vec3 exactHit;
     public boolean useShift = false;
     public boolean useProtocol = false;
     @Setter
@@ -48,6 +50,13 @@ public class ActionManager {
         this.side = side;
         this.hitModifier = hitModifier;
         this.useShift = useShift;
+    }
+
+    /** 已按真实方块形状计算的世界坐标，不再按整方块面中心旋转/缩放。 */
+    public void queueClickAt(BlockPos target, Direction side, Vec3 hit, boolean useShift) {
+        if (this.target != null) return;
+        queueClick(target, side, Vec3.ZERO, useShift);
+        this.exactHit = hit;
     }
 
     public ActionManager sendQueue(LocalPlayer player) {
@@ -84,7 +93,9 @@ public class ActionManager {
             direction = BlockUtils.getHorizontalDirection(look.yaw());
         }
         Vec3 hitVec;
-        if (!useProtocol) {
+        if (exactHit != null) {
+            hitVec = exactHit;
+        } else if (!useProtocol) {
             Vec3 targetCenter = Vec3.atCenterOf(target);
             Vec3 sideOffset = Vec3.atLowerCornerOf(BlockUtils.getVector(side)).scale(0.5);
             Vec3 rotatedHitModifier = hitModifier.yRot((direction.toYRot() + 90) % 360).scale(0.5);
@@ -132,6 +143,7 @@ public class ActionManager {
         this.target = null;
         this.side = null;
         this.hitModifier = null;
+        this.exactHit = null;
         this.useShift = false;
         this.useProtocol = false;
         this.needWaitModifyLook = false;
