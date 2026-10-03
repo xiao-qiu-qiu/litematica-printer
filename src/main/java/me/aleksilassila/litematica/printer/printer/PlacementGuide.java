@@ -4,6 +4,7 @@ import me.aleksilassila.litematica.printer.I18n;
 import me.aleksilassila.litematica.printer.Reference;
 import me.aleksilassila.litematica.printer.printer.action.Action;
 import me.aleksilassila.litematica.printer.printer.action.ClickAction;
+import me.aleksilassila.litematica.printer.printer.action.PlaceIceForWaterAction;
 import me.aleksilassila.litematica.printer.config.Configs;
 import me.aleksilassila.litematica.printer.enums.BlockMatchingType;
 import me.aleksilassila.litematica.printer.utils.*;
@@ -89,7 +90,7 @@ public class PlacementGuide {
                     canGenerateWater)) {
                 case PLACE_ICE -> {
                     // 冰必须落在目标格，始终点击真实支撑面，避免凭空放置回退到邻格。
-                    return new Action().setItem(Items.ICE).setRequiresSupport();
+                    return new PlaceIceForWaterAction();
                 }
                 case PLACE_BLOCK -> {
                     return buildActionMissingBlock(ctx, requiredType, skip);

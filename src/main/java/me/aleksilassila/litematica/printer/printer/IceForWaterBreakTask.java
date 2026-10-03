@@ -1,12 +1,11 @@
 package me.aleksilassila.litematica.printer.printer;
 
-import me.aleksilassila.litematica.printer.I18n;
 import me.aleksilassila.litematica.printer.config.Configs;
 import me.aleksilassila.litematica.printer.handler.ModuleManager;
+import me.aleksilassila.litematica.printer.handler.handlers.Print;
 import me.aleksilassila.litematica.printer.mixin.extension.MultiPlayerGameModeExtension;
 import me.aleksilassila.litematica.printer.utils.BreakUtils;
 import me.aleksilassila.litematica.printer.utils.InventoryUtils;
-import me.aleksilassila.litematica.printer.utils.MessageUtils;
 import me.aleksilassila.litematica.printer.utils.PacketUtils;
 import me.aleksilassila.litematica.printer.utils.PlayerUtils;
 import net.minecraft.client.Minecraft;
@@ -92,9 +91,10 @@ public final class IceForWaterBreakTask {
         }
         long now = ModuleManager.getCurrentHandlerTime();
         if (now - startedAt >= MAX_TASK_TICKS) {
+            BlockPos retryPos = pos;
             clear();
-            MessageUtils.setOverlayMessage(I18n.ICE_WATER_TIMEOUT.getName());
-            Configs.Core.WORK_SWITCH.setBooleanValue(false);
+            BlockPosCooldownManager.INSTANCE.setCooldown(client.level, Print.NAME, retryPos,
+                    Print.WATER_RETRY_COOLDOWN_TICKS);
             return;
         }
         // 发出 STOP 后保留任务，避免打印模块抢走工具或重复发包。

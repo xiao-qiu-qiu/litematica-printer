@@ -18,7 +18,7 @@ public final class IceForWaterFlow {
         BREAK_ICE_AND_WAIT,
         /** 正在等待水生成，未超时 → 继续等待 */
         KEEP_WAITING,
-        /** 等待超过 maxWaitTicks 仍无水 → 停止本次打印，避免重放冰覆盖迟到的水源 */
+        /** 等待达到 maxWaitTicks 仍无水 → 当前坐标冷却后重新读取状态并重试 */
         WAIT_TIMEOUT,
         /** 目标位置已有纯水源（或水刚生成）→ 放置含水方块（清除等待） */
         PLACE_BLOCK,
@@ -31,7 +31,7 @@ public final class IceForWaterFlow {
         if (!enabled) return Step.SKIP;
         if (isWaitingHere) {
             if (matchesWaterRequest) return Step.PLACE_BLOCK;
-            return waitTicks > maxWaitTicks ? Step.WAIT_TIMEOUT : Step.KEEP_WAITING;
+            return waitTicks >= maxWaitTicks ? Step.WAIT_TIMEOUT : Step.KEEP_WAITING;
         }
         if (isIce) return Step.BREAK_ICE_AND_WAIT;
         return matchesWaterRequest ? Step.PLACE_BLOCK : Step.PLACE_ICE;

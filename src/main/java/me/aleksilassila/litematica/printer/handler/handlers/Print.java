@@ -14,6 +14,7 @@ import me.aleksilassila.litematica.printer.printer.*;
 import me.aleksilassila.litematica.printer.printer.action.Action;
 import me.aleksilassila.litematica.printer.printer.ActionManager;
 import me.aleksilassila.litematica.printer.printer.action.ClickAction;
+import me.aleksilassila.litematica.printer.printer.action.PlaceIceForWaterAction;
 import me.aleksilassila.litematica.printer.printer.MissingMaterialTracker;
 import me.aleksilassila.litematica.printer.utils.*;
 import net.minecraft.core.BlockPos;
@@ -54,10 +55,10 @@ public class Print extends Module {
     @Getter @Setter
     private BlockPos watingForWaterPos;
 
-    // 等待水生成的最大tick数：超过仍未出水则警告并关闭打印机
+    // 超时只让当前坐标冷却重试，不关闭整个打印机。
     private static final int MAX_WAIT_WATER_TICKS = 60;
+    public static final int WATER_RETRY_COOLDOWN_TICKS = 20;
     private int watingForWaterTicks;
-    private boolean placingIceForWater;
 
     public Print() {
         super(NAME, Configs.Print.ENABLED, Configs.Print.PRINT_SELECTION_TYPE, true);
@@ -73,6 +74,23 @@ public class Print extends Module {
     @Override
     protected boolean isPlacementModule() {
         return true;
+    }
+
+    @Override
+    protected void preprocess() {
+        // 正确方块会在 needsWork 中提前跳过，必须在筛选前清理已完成的等水状态。
+        if (watingForWaterPos == null) return;
+        BlockState current = level.getBlockState(watingForWaterPos);
+        if (!Configs.Print.PRINT_ICE_FOR_WATER.getBooleanValue()
+                || BlockUtils.isWaterSource(current) || BlockUtils.isWaterlogged(current)
+                || (!current.is(Blocks.ICE) && !BlockUtils.isReplaceable(current))) {
+            clearWaterWait();
+        }
+    }
+
+    private void clearWaterWait() {
+        watingForWaterPos = null;
+        watingForWaterTicks = 0;
     }
 
     @Override
@@ -139,9 +157,11 @@ public class Print extends Module {
 
     @Override
     protected void executeIteration(BlockPos blockPos, AtomicReference<Boolean> skipIteration) {
-        placingIceForWater = false;
+        boolean placingIceForWater = action instanceof PlaceIceForWaterAction;
         if (Configs.Print.PRINT_ICE_FOR_WATER.getBooleanValue()
-                && BlockUtils.needsWater(ctx.requiredState)) {
+                && BlockUtils.needsWater(ctx.requiredState)
+                && (placingIceForWater || ctx.currentState.is(Blocks.ICE)
+                    || blockPos.equals(watingForWaterPos))) {
             boolean isWaitingHere = watingForWaterPos != null && watingForWaterPos.equals(blockPos);
             boolean isIce = ctx.currentState.is(Blocks.ICE);
             boolean matchesWaterRequest = BlockUtils.isWaterSource(ctx.currentState) || BlockUtils.isWaterlogged(ctx.currentState);
@@ -149,8 +169,7 @@ public class Print extends Module {
                     true, isWaitingHere, isIce, matchesWaterRequest, watingForWaterTicks, MAX_WAIT_WATER_TICKS)) {
                 case PLACE_BLOCK -> {
                     if (isWaitingHere) {
-                        watingForWaterPos = null;
-                        watingForWaterTicks = 0;
+                        clearWaterWait();
                     }
                     // 水已生成：走下方正常放置流程，放置含水方块（buildAction 已返回对应 Action）
                 }
@@ -164,11 +183,10 @@ public class Print extends Module {
                     return;
                 }
                 case WAIT_TIMEOUT -> {
-                    // 等待 MAX_WAIT_WATER_TICKS tick 仍无水生成：警告并关闭打印机
-                    watingForWaterPos = null;
-                    watingForWaterTicks = 0;
-                    MessageUtils.setOverlayMessage(I18n.ICE_WATER_TIMEOUT.getName());
-                    Configs.Core.WORK_SWITCH.setBooleanValue(false);
+                    // 下次扫描重新读取世界状态、生成动作；迟到的水/楼梯不会被旧动作覆盖。
+                    clearWaterWait();
+                    BreakUtils.INSTANCE.cancelIceBreak();
+                    setCooldown(blockPos, Math.max(WATER_RETRY_COOLDOWN_TICKS, ConfigUtils.getPlaceCooldown()));
                     return;
                 }
                 case BREAK_ICE_AND_WAIT -> {
@@ -180,8 +198,7 @@ public class Print extends Module {
                     return;
                 }
                 case PLACE_ICE -> {
-                    // 占位不等于可替换：已有实体方块必须走正常修正/拆除流程。
-                    placingIceForWater = BlockUtils.isReplaceable(ctx.currentState);
+                    // 是否放冰以实际 Action 为准，不把放楼梯等普通动作误记成放冰。
                 }
                 case SKIP -> {
                 }
@@ -250,7 +267,6 @@ public class Print extends Module {
         action.queueAction(blockPos, side, useShift, player);
         // 放冰只发送请求；等服务器回传目标格确实是冰，再开始挖掘。
         if (placingIceForWater) {
-            placingIceForWater = false;
             ActionManager.INSTANCE.setLook(action.getPlayerLook());
             ActionManager.INSTANCE.setNeedWaitModifyLookFromAction(action.getNeedWaitModifyLook());
             ActionManager.INSTANCE.sendQueue(player, false);
@@ -282,9 +298,7 @@ public class Print extends Module {
     public void resetScanState() {
         super.resetScanState();
         BreakUtils.INSTANCE.cancelIceBreak();
-        watingForWaterPos = null;
-        watingForWaterTicks = 0;
-        placingIceForWater = false;
+        clearWaterWait();
     }
 
     private void ensureIceBreakQueued(BlockPos pos) {
