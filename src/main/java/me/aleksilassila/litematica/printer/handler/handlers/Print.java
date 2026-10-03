@@ -11,6 +11,7 @@ import me.aleksilassila.litematica.printer.enums.HighlightType;
 import me.aleksilassila.litematica.printer.handler.Module;
 import me.aleksilassila.litematica.printer.handler.ModuleManager;
 import me.aleksilassila.litematica.printer.interfaces.Implementation;
+import me.aleksilassila.litematica.printer.interfaces.compat.TakeItOutCompat;
 import me.aleksilassila.litematica.printer.printer.*;
 import me.aleksilassila.litematica.printer.printer.action.Action;
 import me.aleksilassila.litematica.printer.printer.ActionManager;
@@ -21,8 +22,11 @@ import me.aleksilassila.litematica.printer.utils.*;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.level.block.*;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
@@ -43,6 +47,7 @@ public class Print extends Module {
     private boolean printerMemorySync;
 
     private Action action;
+    private boolean waitingForMaterials;
 
     private SchematicBlockContext ctx;
 
@@ -146,7 +151,58 @@ public class Print extends Module {
         Action action = guide.getAction(ctx);
         if (action == null) return false;
         this.action = action;
-        return true;
+        waitingForMaterials = false;
+        // 已发出的放冰请求仍需收取确认，背包里最后一块冰耗尽也继续等待。
+        if (blockPos.equals(watingForWaterPos)) return true;
+        if (isPlacementBlockedByPlayer()) return false;
+        return prepareMaterials(blockPos);
+    }
+
+    private boolean prepareMaterials(BlockPos pos) {
+        Item[] items = action.getRequiredItems(ctx.requiredState.getBlock());
+        if (InventoryUtils.hasAnyRequiredItem(player, items)) return true;
+
+        // 实际补料才进入处理/等待状态，单纯缺料不占用本轮执行次数和黄框。
+        waitingForMaterials = RemoteContainerUtils.hasPendingExchange()
+                || QuickShulkerUtils.isOpenHandler() || TakeItOutCompat.isAwaitingItem()
+                || QuickShulkerUtils.requestShulkerItem(player, items);
+        if (waitingForMaterials) return true;
+
+        recordMissingMaterial(items);
+        if (items != null && items.length > 0 && items[0] != null
+                && Configs.Print.USE_REMOTE_CONTAINER.getBooleanValue()) {
+            RemoteContainerUtils.tryGetItemFromContainers(items[0]);
+            waitingForMaterials = RemoteContainerUtils.hasPendingExchange();
+            if (waitingForMaterials) return true;
+        }
+        setCooldown(pos, ConfigUtils.getPlaceCooldown());
+        return false;
+    }
+
+    private boolean isPlacementBlockedByPlayer() {
+        if (player.noPhysics) return false;
+        Item[] items = action.getRequiredItems(ctx.requiredState.getBlock());
+        if (items == null || items.length == 0) return false;
+        // 无物品交互、工具操作和破冰不属于放方块；叠半砖/雪层仍要检查。
+        Item selected = items[0];
+        for (Item item : items) {
+            if (InventoryUtils.hasAnyRequiredItem(player, new Item[]{item})) {
+                selected = item;
+                break;
+            }
+        }
+        if (!(selected instanceof BlockItem blockItem)) return false;
+        BlockState placed = blockItem.getBlock() == ctx.requiredState.getBlock()
+                ? ctx.requiredState : blockItem.getBlock().defaultBlockState();
+        return intersectsPlayer(placed, ctx.blockPos);
+    }
+
+    private boolean intersectsPlayer(BlockState state, BlockPos pos) {
+        AABB playerBox = player.getBoundingBox();
+        for (AABB part : state.getCollisionShape(level, pos, CollisionContext.of(player)).toAabbs()) {
+            if (part.move(pos.getX(), pos.getY(), pos.getZ()).intersects(playerBox)) return true;
+        }
+        return false;
     }
 
     @Override
@@ -170,6 +226,11 @@ public class Print extends Module {
 
     @Override
     protected void executeIteration(BlockPos blockPos, AtomicReference<Boolean> skipIteration) {
+        if (waitingForMaterials) {
+            enterWaiting(blockPos);
+            skipIteration.set(true);
+            return;
+        }
         boolean placingIceForWater = action instanceof PlaceIceForWaterAction;
         if (Configs.Print.PRINT_ICE_FOR_WATER.getBooleanValue()
                 && BlockUtils.needsWater(ctx.requiredState)
@@ -228,6 +289,8 @@ public class Print extends Module {
                 }
             }
         }
+        // 等水超时会在本次执行中重试；等待期间玩家可能已走进目标格。
+        if (isPlacementBlockedByPlayer()) return;
         // 下落检查
         if (Configs.Placement.FALLING_CHECK.getBooleanValue()
                 && ctx.requiredState.getBlock() instanceof FallingBlock) {
@@ -247,7 +310,8 @@ public class Print extends Module {
         }
         Item[] reqItems = action.getRequiredItems(ctx.requiredState.getBlock());
         // 检查是否有待交换的物品
-        if (RemoteContainerUtils.hasPendingExchange()) {
+        if (RemoteContainerUtils.hasPendingExchange() || QuickShulkerUtils.isOpenHandler()
+                || TakeItOutCompat.isAwaitingItem()) {
             enterWaiting(blockPos);
             skipIteration.set(true);
             return;

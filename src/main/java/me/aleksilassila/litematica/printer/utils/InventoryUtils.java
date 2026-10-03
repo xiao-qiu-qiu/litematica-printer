@@ -452,6 +452,15 @@ public class InventoryUtils {
         LAST_MESSAGE_SEND_TIME.put(messageKey, currentTime);
     }
 
+    /** 只检查材料，不切槽、不发包；空手动作和创造模式始终有材料。 */
+    public static boolean hasAnyRequiredItem(LocalPlayer player, @org.jetbrains.annotations.Nullable Item[] items) {
+        if (items == null || items.length == 0 || PlayerUtils.getAbilities(player).instabuild) return true;
+        for (Item item : items) {
+            if (findItemInInventory(player.getInventory(), item) != -1) return true;
+        }
+        return false;
+    }
+
     public static boolean switchToItems(LocalPlayer player, Item[] items) {
         if (items == null || items.length == 0) {
             return true;
