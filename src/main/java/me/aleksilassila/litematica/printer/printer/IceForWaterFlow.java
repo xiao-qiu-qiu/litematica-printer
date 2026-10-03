@@ -18,7 +18,7 @@ public final class IceForWaterFlow {
         BREAK_ICE_AND_WAIT,
         /** 正在等待水生成，未超时 → 继续等待 */
         KEEP_WAITING,
-        /** 等待达到 maxWaitTicks 仍无水 → 当前坐标冷却后重新读取状态并重试 */
+        /** 等待达到 maxWaitTicks 仍未确认 → 使用当前世界状态决定重试动作 */
         WAIT_TIMEOUT,
         /** 目标位置已有纯水源（或水刚生成）→ 放置含水方块（清除等待） */
         PLACE_BLOCK,

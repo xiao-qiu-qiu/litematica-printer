@@ -9,6 +9,7 @@ import me.aleksilassila.litematica.printer.config.Configs;
 import me.aleksilassila.litematica.printer.enums.BlockMatchingType;
 import me.aleksilassila.litematica.printer.enums.HighlightType;
 import me.aleksilassila.litematica.printer.handler.Module;
+import me.aleksilassila.litematica.printer.handler.ModuleManager;
 import me.aleksilassila.litematica.printer.interfaces.Implementation;
 import me.aleksilassila.litematica.printer.printer.*;
 import me.aleksilassila.litematica.printer.printer.action.Action;
@@ -55,10 +56,10 @@ public class Print extends Module {
     @Getter @Setter
     private BlockPos watingForWaterPos;
 
-    // 超时只让当前坐标冷却重试，不关闭整个打印机。
-    private static final int MAX_WAIT_WATER_TICKS = 60;
+    // 挖掘看门狗的退避；正常放冰/出水确认超时不额外冷却。
     public static final int WATER_RETRY_COOLDOWN_TICKS = 20;
-    private int watingForWaterTicks;
+    private long waterWaitStartedAt;
+    private boolean waitingForIcePlacement;
 
     public Print() {
         super(NAME, Configs.Print.ENABLED, Configs.Print.PRINT_SELECTION_TYPE, true);
@@ -85,12 +86,24 @@ public class Print extends Module {
                 || BlockUtils.isWaterSource(current) || BlockUtils.isWaterlogged(current)
                 || (!current.is(Blocks.ICE) && !BlockUtils.isReplaceable(current))) {
             clearWaterWait();
+        } else if (waitingForIcePlacement && current.is(Blocks.ICE)) {
+            waitingForIcePlacement = false;
+            waterWaitStartedAt = ModuleManager.getCurrentHandlerTime();
         }
     }
 
     private void clearWaterWait() {
         watingForWaterPos = null;
-        watingForWaterTicks = 0;
+        waterWaitStartedAt = 0;
+        waitingForIcePlacement = false;
+    }
+
+    /** 冰已消失后才开始计出水等待时间，不把挖掘耗时计入其中。 */
+    public void onIceBroken(BlockPos pos) {
+        if (pos.equals(watingForWaterPos)) {
+            waitingForIcePlacement = false;
+            waterWaitStartedAt = ModuleManager.getCurrentHandlerTime();
+        }
     }
 
     @Override
@@ -165,8 +178,13 @@ public class Print extends Module {
             boolean isWaitingHere = watingForWaterPos != null && watingForWaterPos.equals(blockPos);
             boolean isIce = ctx.currentState.is(Blocks.ICE);
             boolean matchesWaterRequest = BlockUtils.isWaterSource(ctx.currentState) || BlockUtils.isWaterlogged(ctx.currentState);
+            long elapsedTicks = ModuleManager.getCurrentHandlerTime() - waterWaitStartedAt;
+            int waitTicks = (int) Math.min(Integer.MAX_VALUE, Math.max(0, elapsedTicks));
+            int maxWaitTicks = waitingForIcePlacement
+                    ? Configs.Print.ICE_PLACEMENT_WAIT_TICKS.getIntegerValue()
+                    : Configs.Print.WATER_WAIT_TICKS.getIntegerValue();
             switch (IceForWaterFlow.decide(
-                    true, isWaitingHere, isIce, matchesWaterRequest, watingForWaterTicks, MAX_WAIT_WATER_TICKS)) {
+                    true, isWaitingHere, isIce, matchesWaterRequest, waitTicks, maxWaitTicks)) {
                 case PLACE_BLOCK -> {
                     if (isWaitingHere) {
                         clearWaterWait();
@@ -177,22 +195,28 @@ public class Print extends Module {
                     if (isIce) {
                         ensureIceBreakQueued(blockPos);
                     }
-                    watingForWaterTicks++;
                     enterWaiting(blockPos);
                     skipIteration.set(true);
                     return;
                 }
                 case WAIT_TIMEOUT -> {
-                    // 下次扫描重新读取世界状态、生成动作；迟到的水/楼梯不会被旧动作覆盖。
+                    // 本轮 Action 已按最新世界状态生成；确认失败立即继续放置，不额外冷却。
                     clearWaterWait();
                     BreakUtils.INSTANCE.cancelIceBreak();
-                    setCooldown(blockPos, Math.max(WATER_RETRY_COOLDOWN_TICKS, ConfigUtils.getPlaceCooldown()));
-                    return;
+                    if (isIce) {
+                        ensureIceBreakQueued(blockPos);
+                        watingForWaterPos = blockPos.immutable();
+                        waterWaitStartedAt = ModuleManager.getCurrentHandlerTime();
+                        enterWaiting(blockPos);
+                        skipIteration.set(true);
+                        return;
+                    }
                 }
                 case BREAK_ICE_AND_WAIT -> {
                     ensureIceBreakQueued(blockPos);
                     watingForWaterPos = blockPos.immutable();
-                    watingForWaterTicks = 0;
+                    waterWaitStartedAt = ModuleManager.getCurrentHandlerTime();
+                    waitingForIcePlacement = false;
                     enterWaiting(blockPos);
                     skipIteration.set(true);
                     return;
@@ -271,7 +295,8 @@ public class Print extends Module {
             ActionManager.INSTANCE.setNeedWaitModifyLookFromAction(action.getNeedWaitModifyLook());
             ActionManager.INSTANCE.sendQueue(player, false);
             watingForWaterPos = blockPos.immutable();
-            watingForWaterTicks = 0;
+            waterWaitStartedAt = ModuleManager.getCurrentHandlerTime();
+            waitingForIcePlacement = true;
             enterWaiting(blockPos);
             skipIteration.set(true);
             return;

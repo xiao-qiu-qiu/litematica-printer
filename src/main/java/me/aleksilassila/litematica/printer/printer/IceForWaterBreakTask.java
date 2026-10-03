@@ -21,7 +21,6 @@ import org.jetbrains.annotations.Nullable;
 
 /** 一次仅处理一个目标，完整挖掘后等待服务端结果，再决定是否重试。 */
 public final class IceForWaterBreakTask {
-    private static final int ACK_WAIT_TICKS = 20;
     private static final int MAX_TASK_TICKS = 200;
     private final Minecraft client = Minecraft.getInstance();
     private BlockPos pos;
@@ -83,13 +82,20 @@ public final class IceForWaterBreakTask {
         }
         // 每个 tick 重读；冰已变成水/其他方块时，旧任务立即作废。
         BlockState state = level.getBlockState(pos);
-        if (!state.is(Blocks.ICE) || !PlayerUtils.canInteracted(pos)
+        if (!state.is(Blocks.ICE)) {
+            ModuleManager.PRINT.onIceBroken(pos);
+            clear();
+            return;
+        }
+        if (!PlayerUtils.canInteracted(pos)
                 || !BreakUtils.canBreakBlock(pos) || !BreakUtils.breakRestriction(level.getBlockState(pos))
                 || client.gameMode.getPlayerMode().isCreative()) {
             clear();
             return;
         }
         long now = ModuleManager.getCurrentHandlerTime();
+        // 等待确认使用独立配置；任务看门狗只约束挖掘/工具准备，避免长确认时间被截断。
+        if (now < retryAt) return;
         if (now - startedAt >= MAX_TASK_TICKS) {
             BlockPos retryPos = pos;
             clear();
@@ -98,7 +104,6 @@ public final class IceForWaterBreakTask {
             return;
         }
         // 发出 STOP 后保留任务，避免打印模块抢走工具或重复发包。
-        if (now < retryAt) return;
         int oldSlot = InventoryUtils.getSelectedSlot(client.player.getInventory());
         if (!InventoryUtils.selectIceBreakingTool(client.player)) {
             abortMining();
@@ -115,6 +120,7 @@ public final class IceForWaterBreakTask {
         if (!mining) {
             client.gameMode.stopDestroyBlock();
             sendDigPacket(ServerboundPlayerActionPacket.Action.START_DESTROY_BLOCK);
+            startedAt = now;
             mining = true;
             miningTool = client.player.getMainHandItem().copy();
             // 非瞬间破坏从下一 tick 开始累计，与原版持续挖掘时序一致。
@@ -128,7 +134,8 @@ public final class IceForWaterBreakTask {
             mining = false;
             progress = 0;
             level.destroyBlockProgress(client.player.getId(), pos, -1);
-            retryAt = now + ACK_WAIT_TICKS;
+            retryAt = now + Configs.Print.ICE_BREAK_WAIT_TICKS.getIntegerValue();
+            startedAt = retryAt;
         } else {
             level.destroyBlockProgress(client.player.getId(), pos, (int) (progress * 10.0F));
         }

@@ -373,6 +373,24 @@ public class Configs extends ConfigBuilders implements IConfigHandler {
                 .defaultValue(false)
                 .build();
 
+        public static final ConfigInteger ICE_PLACEMENT_WAIT_TICKS = integerValue("printIcePlacementWaitTicks")
+                .defaultValue(10)
+                .range(1, 200)
+                .setVisible(PRINT_ICE_FOR_WATER::getBooleanValue)
+                .build();
+
+        public static final ConfigInteger ICE_BREAK_WAIT_TICKS = integerValue("printIceBreakWaitTicks")
+                .defaultValue(10)
+                .range(1, 200)
+                .setVisible(PRINT_ICE_FOR_WATER::getBooleanValue)
+                .build();
+
+        public static final ConfigInteger WATER_WAIT_TICKS = integerValue("printWaterWaitTicks")
+                .defaultValue(10)
+                .range(1, 200)
+                .setVisible(PRINT_ICE_FOR_WATER::getBooleanValue)
+                .build();
+
         // 自动去皮
         public static final ConfigBoolean STRIP_LOGS = booleanValue("printAutoStripLogs")
                 .defaultValue(false)
@@ -479,6 +497,9 @@ public class Configs extends ConfigBuilders implements IConfigHandler {
                 REPLACEABLE_LIST,
                 SKIP_WATERLOGGED_BLOCK,
                 PRINT_ICE_FOR_WATER,
+                ICE_PLACEMENT_WAIT_TICKS,
+                ICE_BREAK_WAIT_TICKS,
+                WATER_WAIT_TICKS,
                 SAFELY_OBSERVER,
                 STRIP_LOGS,
                 NOTE_BLOCK_TUNING,
