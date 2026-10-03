@@ -124,7 +124,7 @@ public abstract class Module extends ConfigUtils {
         if (box == null) return;
         if (iteratorManager.tryBuildBox(player,
                 selectionType != null ? selectionType.getOptionListValue() : null,
-                needSchematic, useNearestFirst())) {
+                needSchematic, getPrintOrderMode(), getRouteMotion(), getRouteCompletionTicks())) {
             box.set(iteratorManager.getBox());
             scanState = ScanState.RUNNING;
             waitingPos = null;
@@ -329,8 +329,17 @@ public abstract class Module extends ConfigUtils {
         return false;
     }
 
-    protected boolean useNearestFirst() {
-        return false;
+    protected PrintOrderMode getPrintOrderMode() {
+        return PrintOrderMode.COORDINATES;
+    }
+
+    @Nullable
+    protected RouteMotion getRouteMotion() {
+        return null;
+    }
+
+    protected double getRouteCompletionTicks() {
+        return 0;
     }
 
     protected boolean shouldKeepWaiting(BlockPos pos) {

@@ -329,9 +329,8 @@ public class Configs extends ConfigBuilders implements IConfigHandler {
                 .defaultValue(false)
                 .build();
 
-        // 打印时优先处理玩家附近的候选。
-        public static final ConfigBoolean PRINT_NEAREST_FIRST = booleanValue("printNearestFirst")
-                .defaultValue(true)
+        public static final ConfigOptionList PRINT_ORDER_MODE = optionList("printOrderMode")
+                .defaultValue(PrintOrderMode.ROUTE)
                 .build();
 
         // 凭空放置
@@ -491,7 +490,7 @@ public class Configs extends ConfigBuilders implements IConfigHandler {
                 ENABLED,
                 PRINT_SELECTION_TYPE,
                 EASY_PLACE_PROTOCOL,
-                PRINT_NEAREST_FIRST,
+                PRINT_ORDER_MODE,
                 PLACE_IN_AIR,
                 PRINT_FORCED_SNEAK,
                 BREAK_WRONG_BLOCK,
@@ -744,6 +743,15 @@ public class Configs extends ConfigBuilders implements IConfigHandler {
             if (jsonElement != null && jsonElement.isJsonObject()) {
                 JsonObject obj = jsonElement.getAsJsonObject();
                 ConfigUtils.readConfigBase(obj, Reference.MOD_ID, OPTIONS);
+                // 旧版显式关闭就近排序的用户继续使用轴序；旧默认值升级为沿路收尾。
+                if (obj.has(Reference.MOD_ID) && obj.get(Reference.MOD_ID).isJsonObject()) {
+                    JsonObject section = obj.getAsJsonObject(Reference.MOD_ID);
+                    JsonElement oldNearest = section.get("printNearestFirst");
+                    if (!section.has("printOrderMode") && oldNearest != null && oldNearest.isJsonPrimitive()
+                            && oldNearest.getAsJsonPrimitive().isBoolean() && !oldNearest.getAsBoolean()) {
+                        Print.PRINT_ORDER_MODE.setOptionListValue(PrintOrderMode.COORDINATES);
+                    }
+                }
             }
         }
     }

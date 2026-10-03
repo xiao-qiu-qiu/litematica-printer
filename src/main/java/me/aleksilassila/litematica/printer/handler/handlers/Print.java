@@ -8,6 +8,8 @@ import me.aleksilassila.litematica.printer.I18n;
 import me.aleksilassila.litematica.printer.config.Configs;
 import me.aleksilassila.litematica.printer.enums.BlockMatchingType;
 import me.aleksilassila.litematica.printer.enums.HighlightType;
+import me.aleksilassila.litematica.printer.enums.PrintOrderMode;
+import me.aleksilassila.litematica.printer.enums.RadiusShapeType;
 import me.aleksilassila.litematica.printer.handler.Module;
 import me.aleksilassila.litematica.printer.handler.ModuleManager;
 import me.aleksilassila.litematica.printer.interfaces.Implementation;
@@ -74,6 +76,12 @@ public class Print extends Module {
     private long finalConfirmationUntil;
     private int finalPlacementAttempts;
     private static final int MAX_FINAL_PLACEMENT_ATTEMPTS = 3;
+    private final RouteMotion routeMotion = new RouteMotion();
+    private ClientLevel routeLevel;
+    private long waterTargetStartedAt;
+    private boolean measureFullWaterTask;
+    private double averageCompletionTicks = -1;
+    private long lastRouteHint = -100;
 
     public Print() {
         super(NAME, Configs.Print.ENABLED, Configs.Print.PRINT_SELECTION_TYPE, true);
@@ -92,8 +100,52 @@ public class Print extends Module {
     }
 
     @Override
-    protected boolean useNearestFirst() {
-        return Configs.Print.PRINT_NEAREST_FIRST.getBooleanValue();
+    protected PrintOrderMode getPrintOrderMode() {
+        return (PrintOrderMode) Configs.Print.PRINT_ORDER_MODE.getOptionListValue();
+    }
+
+    @Override
+    protected RouteMotion getRouteMotion() {
+        return routeMotion;
+    }
+
+    @Override
+    protected double getRouteCompletionTicks() {
+        if (averageCompletionTicks >= 0) return Math.max(6, averageCompletionTicks + 4);
+        return Configs.Print.ICE_PLACEMENT_WAIT_TICKS.getIntegerValue()
+                + Configs.Print.ICE_BREAK_WAIT_TICKS.getIntegerValue()
+                + Configs.Print.WATER_WAIT_TICKS.getIntegerValue()
+                + 2 * Configs.Placement.HOTBAR_SWITCH_DELAY.getIntegerValue() + 4;
+    }
+
+    /** 必须在 ModuleManager 的补料、破冰等等待判断之前采样。 */
+    public void updateRouteMotion() {
+        if (client.level != routeLevel) {
+            routeLevel = client.level;
+            averageCompletionTicks = -1;
+        }
+        if (client.player == null || client.level == null || !ConfigUtils.isPrinterEnable()
+                || !Configs.Print.ENABLED.getBooleanValue()) {
+            routeMotion.reset();
+            return;
+        }
+        routeMotion.sample(client.level, client.player.position(), ModuleManager.getCurrentHandlerTime());
+    }
+
+    private void warnIfRouteTooFast(BlockPos pos) {
+        if (getPrintOrderMode() != PrintOrderMode.ROUTE || routeMotion.speed() <= 0
+                || routeMotion.direction().lengthSqr() == 0) return;
+        Vec3 eye = player.getEyePosition();
+        RadiusShapeType shape = Configs.Core.ITERATOR_SHAPE.getOptionListValue() instanceof RadiusShapeType value
+                ? value : RadiusShapeType.SPHERE;
+        long now = ModuleManager.getCurrentHandlerTime();
+        if (ScanOrder.along(pos, eye, routeMotion.direction()) < -0.5
+                && !ScanOrder.hasCompletionRoom(pos, eye, routeMotion.direction(), routeMotion.speed(),
+                    ConfigUtils.getEffectiveRange(), shape, getRouteCompletionTicks())
+                && now - lastRouteHint >= 100) {
+            MessageUtils.setOverlayMessage(MessageUtils.translatable("litematica-printer.message.routePrintSlowDown"));
+            lastRouteHint = now;
+        }
     }
 
     @Override
@@ -119,9 +171,12 @@ public class Print extends Module {
 
     private void retainWaterTarget(BlockPos pos) {
         if (pos.equals(waterTarget)) return;
+        warnIfRouteTooFast(pos);
         waterTarget = pos.immutable();
         waterTargetState = ctx.requiredState;
         waterTargetLevel = level;
+        waterTargetStartedAt = ModuleManager.getCurrentHandlerTime();
+        measureFullWaterTask = action instanceof PlaceIceForWaterAction && BlockUtils.isWaterlogged(ctx.requiredState);
         finalConfirmationUntil = 0;
         finalPlacementAttempts = 0;
     }
@@ -150,8 +205,23 @@ public class Print extends Module {
 
     @Override
     protected void preprocess() {
-        if (waterTarget != null && (!isWaterTargetValid(waterTarget) || isCorrectBlock(waterTarget))) {
-            releaseWaterTarget();
+        if (waterTarget != null) {
+            boolean valid = isWaterTargetValid(waterTarget);
+            boolean complete = valid && isCorrectBlock(waterTarget);
+            if (complete && measureFullWaterTask && finalPlacementAttempts <= 1) {
+                double elapsed = Math.max(1, ModuleManager.getCurrentHandlerTime() - waterTargetStartedAt);
+                // 不把单独放楼梯、补料长等待或反复被拒绝的耗时混入正常完整流程。
+                if (elapsed <= 200) {
+                    averageCompletionTicks = averageCompletionTicks < 0 ? elapsed
+                            : averageCompletionTicks * 0.75 + elapsed * 0.25;
+                }
+            }
+            if (!valid || complete) {
+                if (!complete && waterTargetLevel == level && !PlayerUtils.canInteracted(waterTarget)) {
+                    warnIfRouteTooFast(waterTarget);
+                }
+                releaseWaterTarget();
+            }
         }
         if (waterTarget != null && finalPlacementAttempts >= MAX_FINAL_PLACEMENT_ATTEMPTS
                 && ModuleManager.getCurrentHandlerTime() >= finalConfirmationUntil) {

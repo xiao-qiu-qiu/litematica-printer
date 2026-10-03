@@ -40,6 +40,7 @@ public class ModuleManager {
     private static boolean takeItOutAwaiting = false;
 
     public static void tick() {
+        PRINT.updateRouteMotion();
         // If TakeItOut is waiting for a server-side shulker extraction, skip
         // all processing so the printer does not interfere.
         boolean awaitingItem = TakeItOutCompat.isAwaitingItem();

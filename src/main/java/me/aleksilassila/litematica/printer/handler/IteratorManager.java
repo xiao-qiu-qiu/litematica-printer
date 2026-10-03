@@ -5,10 +5,12 @@ import fi.dy.masa.malilib.util.LayerMode;
 import fi.dy.masa.malilib.util.LayerRange;
 import me.aleksilassila.litematica.printer.config.Configs;
 import me.aleksilassila.litematica.printer.enums.IterationOrderType;
+import me.aleksilassila.litematica.printer.enums.PrintOrderMode;
 import me.aleksilassila.litematica.printer.enums.RadiusShapeType;
 import me.aleksilassila.litematica.printer.enums.SelectionType;
 import me.aleksilassila.litematica.printer.printer.PrinterBox;
 import me.aleksilassila.litematica.printer.printer.ScanOrder;
+import me.aleksilassila.litematica.printer.printer.RouteMotion;
 import me.aleksilassila.litematica.printer.utils.ConfigUtils;
 import me.aleksilassila.litematica.printer.utils.LitematicaUtils;
 import me.aleksilassila.litematica.printer.utils.PlayerUtils;
@@ -54,7 +56,12 @@ public class IteratorManager {
     @Nullable
     private PrinterBox lastBox;
     private boolean useSchematicCandidates;
-    private boolean nearestFirst;
+    private PrintOrderMode orderMode = PrintOrderMode.COORDINATES;
+    private Vec3 routeDirection = Vec3.ZERO;
+    private double routeSpeed;
+    private double completionTicks;
+    private double sortedCompletionTicks;
+    private long routeRevision = -1;
 
     private boolean needsRebuild;
     private boolean dirtyIterator;
@@ -68,7 +75,7 @@ public class IteratorManager {
      * 根据玩家位置和配置重建 PrinterBox，返回是否需要重置扫描状态。
      */
     public boolean tryBuildBox(LocalPlayer player, @Nullable Object selectionTypeObj, boolean needSchematic,
-                               boolean nearestFirst) {
+                               PrintOrderMode orderMode, @Nullable RouteMotion motion, double completionTicks) {
         Vec3 currentEyePos = player.getEyePosition();
         double effectiveRange = ConfigUtils.getEffectiveRange();
         double refreshDistance = Configs.Core.SCAN_REFRESH_DISTANCE.getDoubleValue();
@@ -85,6 +92,7 @@ public class IteratorManager {
 
         SelectionType selectionType = selectionTypeObj instanceof SelectionType s ? s : null;
         boolean useSchematicCandidates = needSchematic;
+        long currentRouteRevision = motion != null ? motion.revision() : -1;
 
         boolean needRebuild = this.needsRebuild
                 || this.box == null
@@ -102,7 +110,9 @@ public class IteratorManager {
                 || layerAxis != lastLayerAxis
                 || layerMode != lastLayerMode
                 || selectionType != lastSelectionType
-                || this.nearestFirst != nearestFirst
+                || this.orderMode != orderMode
+                || (orderMode == PrintOrderMode.ROUTE && (routeRevision != currentRouteRevision
+                    || (cachedIterator != null && Math.abs(sortedCompletionTicks - completionTicks) >= 4)))
                 || (box != null && (box.iterationMode != Configs.Core.ITERATION_ORDER.getOptionListValue()
                     || box.xIncrement == Configs.Core.X_REVERSE.getBooleanValue()
                     || box.yIncrement == Configs.Core.Y_REVERSE.getBooleanValue()
@@ -113,6 +123,9 @@ public class IteratorManager {
         this.eyePos = currentEyePos;
         this.effectiveRange = effectiveRange;
         this.shapeType = currentShape;
+        routeDirection = motion != null ? motion.direction() : Vec3.ZERO;
+        routeSpeed = motion != null ? motion.speed() : 0;
+        this.completionTicks = completionTicks;
 
         if (needRebuild) {
             lastEyePos = currentEyePos;
@@ -127,7 +140,8 @@ public class IteratorManager {
             lastLayerMode = layerMode;
             lastSelectionType = selectionType;
             this.useSchematicCandidates = useSchematicCandidates;
-            this.nearestFirst = nearestFirst;
+            this.orderMode = orderMode;
+            routeRevision = currentRouteRevision;
 
             int minX = (int) Math.floor(player.getX() - effectiveRange);
             int maxX = (int) Math.ceil(player.getX() + effectiveRange);
@@ -248,7 +262,7 @@ public class IteratorManager {
 
     private Iterator<BlockPos> createIterator() {
         Iterator<BlockPos> candidates = createCoordinateIterator();
-        if (!nearestFirst) return candidates;
+        if (orderMode == PrintOrderMode.COORDINATES) return candidates;
         // 只对当前投影和可达范围内的位置排序，不在排序阶段读取方块或触发取物。
         List<BlockPos> positions = new ArrayList<>();
         while (candidates.hasNext()) {
@@ -256,8 +270,13 @@ public class IteratorManager {
             if (shapeType != null ? PlayerUtils.canInteracted(pos, eyePos, effectiveRange, shapeType)
                     : PlayerUtils.canInteracted(pos)) positions.add(pos);
         }
-        positions.sort(ScanOrder.nearest(eyePos,
-                ScanOrder.coordinates(box.iterationMode, box.xIncrement, box.yIncrement, box.zIncrement)));
+        Comparator<BlockPos> coordinates = ScanOrder.coordinates(box.iterationMode,
+                box.xIncrement, box.yIncrement, box.zIncrement);
+        positions.sort(orderMode == PrintOrderMode.ROUTE
+                ? ScanOrder.alongRoute(eyePos, routeDirection, routeSpeed, effectiveRange,
+                    shapeType != null ? shapeType : RadiusShapeType.SPHERE, completionTicks, coordinates)
+                : ScanOrder.nearest(eyePos, coordinates));
+        sortedCompletionTicks = completionTicks;
         return positions.iterator();
     }
 
