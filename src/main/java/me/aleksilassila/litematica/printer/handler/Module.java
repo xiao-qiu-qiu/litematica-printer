@@ -111,6 +111,7 @@ public abstract class Module extends ConfigUtils {
         }
 
         if (!isConfigAllowed()) {
+            onDisabled();
             pendingHighlights.clear();
             return;
         }
@@ -123,7 +124,7 @@ public abstract class Module extends ConfigUtils {
         if (box == null) return;
         if (iteratorManager.tryBuildBox(player,
                 selectionType != null ? selectionType.getOptionListValue() : null,
-                needSchematic)) {
+                needSchematic, useNearestFirst())) {
             box.set(iteratorManager.getBox());
             scanState = ScanState.RUNNING;
             waitingPos = null;
@@ -182,8 +183,13 @@ public abstract class Module extends ConfigUtils {
                 if (pos != null && needsWork(pos)) {
                     executeWithPlacementDelay(pos);
                     execCount++;
-                    if (maxExecs > 0 && execCount >= maxExecs) return;
                 }
+                // 多阶段任务独立于扫描游标；冷却/确认期间也保留该位置。
+                if (pos != null && shouldKeepWaiting(pos)) {
+                    enterWaiting(pos);
+                    return;
+                }
+                if (maxExecs > 0 && execCount >= maxExecs) return;
                 if (skipIteration.get() || ActionManager.INSTANCE.needWaitModifyLook) return;
             }
 
@@ -268,6 +274,13 @@ public abstract class Module extends ConfigUtils {
         waitingPos = pos;
     }
 
+    protected void leaveWaiting(BlockPos pos) {
+        if (pos.equals(waitingPos)) {
+            scanState = ScanState.RUNNING;
+            waitingPos = null;
+        }
+    }
+
     private boolean needsWork(BlockPos pos) {
         if (!PlayerUtils.canInteracted(pos) || isOnCooldown(pos) || isCorrectBlock(pos)) {
             return false;
@@ -275,7 +288,7 @@ public abstract class Module extends ConfigUtils {
         return canProcessPos(pos);
     }
 
-    private boolean isPosInWorkspace(BlockPos pos) {
+    protected boolean isPosInWorkspace(BlockPos pos) {
         if (selectionType != null
                 && selectionType.getOptionListValue() == SelectionType.LITEMATICA_RENDER_LAYER
                 && !LitematicaUtils.isPositionWithinRange(pos)) {
@@ -316,6 +329,14 @@ public abstract class Module extends ConfigUtils {
         return false;
     }
 
+    protected boolean useNearestFirst() {
+        return false;
+    }
+
+    protected boolean shouldKeepWaiting(BlockPos pos) {
+        return false;
+    }
+
     protected int getMaxExecutions() {
         return -1;
     }
@@ -325,6 +346,9 @@ public abstract class Module extends ConfigUtils {
     }
 
     protected void preprocess() {
+    }
+
+    protected void onDisabled() {
     }
 
     protected boolean canExecute() {

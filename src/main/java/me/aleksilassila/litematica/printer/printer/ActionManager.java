@@ -11,6 +11,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.NotNull;
@@ -31,6 +32,11 @@ public class ActionManager {
     public Vec3 hitModifier;
     @Nullable
     private Vec3 exactHit;
+    @Nullable
+    private Boolean queuedPrediction;
+    @Setter
+    @Nullable
+    private Runnable onSent;
     public boolean useShift = false;
     public boolean useProtocol = false;
     @Setter
@@ -60,7 +66,8 @@ public class ActionManager {
     }
 
     public ActionManager sendQueue(LocalPlayer player) {
-        return sendQueue(player, !Configs.Placement.PRINT_USE_PACKET.getBooleanValue());
+        return sendQueue(player, queuedPrediction != null ? queuedPrediction
+                : !Configs.Placement.PRINT_USE_PACKET.getBooleanValue());
     }
 
     public ActionManager sendQueue(LocalPlayer player, boolean localPrediction) {
@@ -68,6 +75,8 @@ public class ActionManager {
             clearQueue();
             return this;
         }
+        // 等转向后续发同一请求时，保留调用方选择的服务端确认模式。
+        queuedPrediction = localPrediction;
         if (look != null) {
             PacketUtils.sendLookPacket(player, look);
         }
@@ -110,9 +119,11 @@ public class ActionManager {
             setShift(player, false);
         }
         MultiPlayerGameModeExtension gameModeExtension = (MultiPlayerGameModeExtension) Reference.MINECRAFT.gameMode;
+        boolean sent = false;
         if (gameModeExtension != null) {
             BlockHitResult blockHitResult = new BlockHitResult(hitVec, side, target, false);
-            gameModeExtension.litematica_printer$useItemOn(localPrediction, InteractionHand.MAIN_HAND, blockHitResult);
+            sent = gameModeExtension.litematica_printer$useItemOn(localPrediction,
+                    InteractionHand.MAIN_HAND, blockHitResult) != InteractionResult.FAIL;
             PlacementDelayManager.INSTANCE.onPlacement();
         }
         if (useShift && !wasSneak) {
@@ -120,7 +131,9 @@ public class ActionManager {
         } else if (!useShift && wasSneak) {
             setShift(player, true);
         }
+        Runnable sentCallback = onSent;
         clearQueue();
+        if (sent && sentCallback != null) sentCallback.run();
         return this;
     }
 
@@ -144,6 +157,8 @@ public class ActionManager {
         this.side = null;
         this.hitModifier = null;
         this.exactHit = null;
+        this.queuedPrediction = null;
+        this.onSent = null;
         this.useShift = false;
         this.useProtocol = false;
         this.needWaitModifyLook = false;

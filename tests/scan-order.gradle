@@ -1,0 +1,21 @@
+// Run with JDK 25: gradlew -I tests/scan-order.gradle :26.1.2:scanOrderRegression :26.2:scanOrderRegression
+gradle.beforeProject { project ->
+    if (project.name in ['26.1.2', '26.2']) {
+        project.pluginManager.withPlugin('java') {
+            def classes = project.layout.buildDirectory.dir('scan-order-regression')
+            def regressionClasspath = project.sourceSets.main.output + project.sourceSets.main.compileClasspath
+            def compile = project.tasks.register('compileScanOrderRegression', JavaCompile) {
+                dependsOn project.tasks.named('classes')
+                source project.rootProject.file('tests/ScanOrderRegression.java')
+                classpath = regressionClasspath
+                destinationDirectory = classes
+                options.encoding = 'UTF-8'
+            }
+            project.tasks.register('scanOrderRegression', JavaExec) {
+                dependsOn compile
+                classpath = project.files(classes) + regressionClasspath
+                mainClass = 'ScanOrderRegression'
+            }
+        }
+    }
+}

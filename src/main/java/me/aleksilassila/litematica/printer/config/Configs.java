@@ -329,6 +329,11 @@ public class Configs extends ConfigBuilders implements IConfigHandler {
                 .defaultValue(false)
                 .build();
 
+        // 打印时优先处理玩家附近的候选。
+        public static final ConfigBoolean PRINT_NEAREST_FIRST = booleanValue("printNearestFirst")
+                .defaultValue(true)
+                .build();
+
         // 凭空放置
         public static final ConfigBoolean PLACE_IN_AIR = booleanValue("placeInAir")
                 .defaultValue(true)
@@ -486,6 +491,7 @@ public class Configs extends ConfigBuilders implements IConfigHandler {
                 ENABLED,
                 PRINT_SELECTION_TYPE,
                 EASY_PLACE_PROTOCOL,
+                PRINT_NEAREST_FIRST,
                 PLACE_IN_AIR,
                 PRINT_FORCED_SNEAK,
                 BREAK_WRONG_BLOCK,

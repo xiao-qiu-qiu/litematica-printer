@@ -19,6 +19,7 @@ import me.aleksilassila.litematica.printer.printer.action.ClickAction;
 import me.aleksilassila.litematica.printer.printer.action.PlaceIceForWaterAction;
 import me.aleksilassila.litematica.printer.printer.MissingMaterialTracker;
 import me.aleksilassila.litematica.printer.utils.*;
+import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.item.Item;
@@ -66,6 +67,14 @@ public class Print extends Module {
     private long waterWaitStartedAt;
     private boolean waitingForIcePlacement;
 
+    // 完整含水打印任务独立于扫描游标；产水只结束等待阶段，不释放最终目标。
+    @Nullable private BlockPos waterTarget;
+    @Nullable private BlockState waterTargetState;
+    @Nullable private ClientLevel waterTargetLevel;
+    private long finalConfirmationUntil;
+    private int finalPlacementAttempts;
+    private static final int MAX_FINAL_PLACEMENT_ATTEMPTS = 3;
+
     public Print() {
         super(NAME, Configs.Print.ENABLED, Configs.Print.PRINT_SELECTION_TYPE, true);
         this.guide = new PlacementGuide(client);
@@ -83,7 +92,76 @@ public class Print extends Module {
     }
 
     @Override
+    protected boolean useNearestFirst() {
+        return Configs.Print.PRINT_NEAREST_FIRST.getBooleanValue();
+    }
+
+    @Override
+    protected boolean shouldKeepWaiting(BlockPos pos) {
+        return pos.equals(waterTarget);
+    }
+
+    @Override
+    protected void onDisabled() {
+        if (waterTarget != null || watingForWaterPos != null) releaseWaterTarget();
+    }
+
+    /** 挖冰任务也调用此检查，确保暂停扫描时仍响应离开范围、换世界和投影变化。 */
+    public boolean isWaterTargetValid(BlockPos pos) {
+        WorldSchematic schematic = SchematicWorldHandler.getSchematicWorld();
+        return pos.equals(waterTarget) && waterTargetLevel == client.level
+                && Configs.Print.ENABLED.getBooleanValue()
+                && Configs.Print.PRINT_ICE_FOR_WATER.getBooleanValue()
+                && schematic != null && schematic.getBlockState(pos).equals(waterTargetState)
+                && client.level.getWorldBorder().isWithinBounds(pos)
+                && isPosInWorkspace(pos) && PlayerUtils.canInteracted(pos);
+    }
+
+    private void retainWaterTarget(BlockPos pos) {
+        if (pos.equals(waterTarget)) return;
+        waterTarget = pos.immutable();
+        waterTargetState = ctx.requiredState;
+        waterTargetLevel = level;
+        finalConfirmationUntil = 0;
+        finalPlacementAttempts = 0;
+    }
+
+    private void releaseWaterTarget() {
+        if (waterTarget != null) leaveWaiting(waterTarget);
+        waterTarget = null;
+        waterTargetState = null;
+        waterTargetLevel = null;
+        finalConfirmationUntil = 0;
+        finalPlacementAttempts = 0;
+        BreakUtils.INSTANCE.cancelIceBreak();
+        clearWaterWait();
+    }
+
+    private boolean skipWaterTarget(BlockPos pos) {
+        if (pos.equals(waterTarget)) releaseWaterTarget();
+        return false;
+    }
+
+    @Override
+    public boolean isOnCooldown(@Nullable BlockPos pos) {
+        return (pos != null && pos.equals(waterTarget)
+                && ModuleManager.getCurrentHandlerTime() < finalConfirmationUntil) || super.isOnCooldown(pos);
+    }
+
+    @Override
     protected void preprocess() {
+        if (waterTarget != null && (!isWaterTargetValid(waterTarget) || isCorrectBlock(waterTarget))) {
+            releaseWaterTarget();
+        }
+        if (waterTarget != null && finalPlacementAttempts >= MAX_FINAL_PLACEMENT_ATTEMPTS
+                && ModuleManager.getCurrentHandlerTime() >= finalConfirmationUntil) {
+            // 连续被服务端拒绝时让其他目标先执行，随后仍可重新扫描并重试。
+            BlockPos retryPos = waterTarget;
+            releaseWaterTarget();
+            setCooldown(retryPos, Math.max(WATER_RETRY_COOLDOWN_TICKS, ConfigUtils.getPlaceCooldown()));
+        }
+        // Module 刷新扫描范围后恢复当前目标；不让新进入范围的位置抢占半成品。
+        if (waterTarget != null) enterWaiting(waterTarget);
         // 正确方块会在 needsWork 中提前跳过，必须在筛选前清理已完成的等水状态。
         if (watingForWaterPos == null) return;
         BlockState current = level.getBlockState(watingForWaterPos);
@@ -113,6 +191,7 @@ public class Print extends Module {
 
     @Override
     public boolean canProcessPos(BlockPos blockPos) {
+        if (!level.getWorldBorder().isWithinBounds(blockPos)) return skipWaterTarget(blockPos);
         WorldSchematic schematic = SchematicWorldHandler.getSchematicWorld();
         if (schematic == null) return false;
 
@@ -145,17 +224,18 @@ public class Print extends Module {
                     }
                 }
             }
-            if (lastSkipResult) return false;
+            if (lastSkipResult) return skipWaterTarget(blockPos);
         }
 
         Action action = guide.getAction(ctx);
-        if (action == null) return false;
+        if (action == null) return skipWaterTarget(blockPos);
         this.action = action;
         waitingForMaterials = false;
         // 已发出的放冰请求仍需收取确认，背包里最后一块冰耗尽也继续等待。
         if (blockPos.equals(watingForWaterPos)) return true;
-        if (isPlacementBlockedByPlayer()) return false;
-        return prepareMaterials(blockPos);
+        if (isPlacementBlockedByPlayer()) return skipWaterTarget(blockPos);
+        if (!prepareMaterials(blockPos)) return skipWaterTarget(blockPos);
+        return true;
     }
 
     private boolean prepareMaterials(BlockPos pos) {
@@ -163,7 +243,8 @@ public class Print extends Module {
         if (InventoryUtils.hasAnyRequiredItem(player, items)) return true;
 
         // 分类筛选稍后才会锁定材料；提前只读检查，避免给被跳过的候选取物。
-        if (!isCycleItemAllowed(items) || action.getValidSide(level, pos) == null) return false;
+        if ((!pos.equals(waterTarget) && !isCycleItemAllowed(items))
+                || action.getValidSide(level, pos) == null) return false;
 
         // 实际补料才进入处理/等待状态，单纯缺料不占用本轮执行次数和黄框。
         waitingForMaterials = RemoteContainerUtils.hasPendingExchange()
@@ -277,6 +358,7 @@ public class Print extends Module {
                     }
                 }
                 case BREAK_ICE_AND_WAIT -> {
+                    retainWaterTarget(blockPos);
                     ensureIceBreakQueued(blockPos);
                     watingForWaterPos = blockPos.immutable();
                     waterWaitStartedAt = ModuleManager.getCurrentHandlerTime();
@@ -293,7 +375,10 @@ public class Print extends Module {
             }
         }
         // 等水超时会在本次执行中重试；等待期间玩家可能已走进目标格。
-        if (isPlacementBlockedByPlayer()) return;
+        if (isPlacementBlockedByPlayer()) {
+            skipWaterTarget(blockPos);
+            return;
+        }
         // 下落检查
         if (Configs.Placement.FALLING_CHECK.getBooleanValue()
                 && ctx.requiredState.getBlock() instanceof FallingBlock) {
@@ -303,11 +388,13 @@ public class Print extends Module {
                 MessageUtils.setOverlayMessage(
                         I18n.BLOCK_NO_SUPPORT.getName(ctx.getRequiredBlockName().getString()));
                 addHighlight(blockPos, HighlightType.FAILED);
+                skipWaterTarget(blockPos);
                 return;
             } else if (level.getBlockState(downPos) != ctx.schematic.getBlockState(downPos)) {
                 MessageUtils.setOverlayMessage(
                         I18n.BLOCK_MISMATCH.getName(ctx.getRequiredBlockName().getString()));
                 addHighlight(blockPos, HighlightType.FAILED);
+                skipWaterTarget(blockPos);
                 return;
             }
         }
@@ -322,6 +409,7 @@ public class Print extends Module {
         Direction side = action.getValidSide(level, blockPos);
         if (side == null) {
             addHighlight(blockPos, HighlightType.FAILED);
+            skipWaterTarget(blockPos);
             return;
         }
         if (!InventoryUtils.switchToItems(player, reqItems)) {
@@ -338,6 +426,7 @@ public class Print extends Module {
                 RemoteContainerUtils.tryGetItemFromContainers(reqItems[0]);
             }
             addHighlight(blockPos, HighlightType.FAILED);
+            skipWaterTarget(blockPos);
             return;
         }
         if (PlacementDelayManager.INSTANCE.wasInventoryOperationThisTick()) {
@@ -354,6 +443,10 @@ public class Print extends Module {
                             || Configs.Print.PRINT_FORCED_SNEAK.getBooleanValue();
         } else {
             useShift = action.getShift();
+        }
+        if (Configs.Print.PRINT_ICE_FOR_WATER.getBooleanValue() && BlockUtils.needsWater(ctx.requiredState)
+                && (placingIceForWater || BlockUtils.isWaterSource(ctx.currentState))) {
+            retainWaterTarget(blockPos);
         }
         action.queueAction(blockPos, side, useShift, player);
         // 放冰只发送请求；等服务器回传目标格确实是冰，再开始挖掘。
@@ -375,7 +468,23 @@ public class Print extends Module {
         }
         ActionManager.INSTANCE.setLook(action.getPlayerLook());
         ActionManager.INSTANCE.setNeedWaitModifyLookFromAction(action.getNeedWaitModifyLook());
-        boolean needWait = ActionManager.INSTANCE.sendQueue(player).needWaitModifyLook;
+        // 多阶段任务以服务端回传的最终状态为完成依据，避免预测成功后过早切目标。
+        boolean completingWaterTarget = blockPos.equals(waterTarget);
+        if (completingWaterTarget) {
+            ActionManager.INSTANCE.setOnSent(() -> {
+                if (blockPos.equals(waterTarget)) {
+                    finalPlacementAttempts++;
+                    finalConfirmationUntil = ModuleManager.getCurrentHandlerTime()
+                            + Configs.Print.WATER_WAIT_TICKS.getIntegerValue();
+                }
+            });
+        }
+        boolean needWait = ActionManager.INSTANCE.sendQueue(player,
+                !completingWaterTarget && !Configs.Placement.PRINT_USE_PACKET.getBooleanValue()).needWaitModifyLook;
+        if (completingWaterTarget) {
+            enterWaiting(blockPos);
+            skipIteration.set(true);
+        }
         if (needWait || hitModifier != null || PlacementDelayManager.INSTANCE.isWaitingForPlacement()) {
             skipIteration.set(true);
         }
@@ -389,8 +498,7 @@ public class Print extends Module {
     @Override
     public void resetScanState() {
         super.resetScanState();
-        BreakUtils.INSTANCE.cancelIceBreak();
-        clearWaterWait();
+        releaseWaterTarget();
     }
 
     private void ensureIceBreakQueued(BlockPos pos) {

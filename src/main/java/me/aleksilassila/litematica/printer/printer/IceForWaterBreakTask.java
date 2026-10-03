@@ -87,7 +87,7 @@ public final class IceForWaterBreakTask {
             clear();
             return;
         }
-        if (!PlayerUtils.canInteracted(pos)
+        if (!ModuleManager.PRINT.isWaterTargetValid(pos) || !PlayerUtils.canInteracted(pos)
                 || !BreakUtils.canBreakBlock(pos) || !BreakUtils.breakRestriction(level.getBlockState(pos))
                 || client.gameMode.getPlayerMode().isCreative()) {
             clear();

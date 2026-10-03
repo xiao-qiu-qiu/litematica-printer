@@ -192,6 +192,8 @@
   "litematica-printer.config.printForcedSneak.desc": "Автоматически поддерживать состояние приседания во время печати.",
   "litematica-printer.config.printIceForWater": "Разрушать лёд для воды",
   "litematica-printer.config.printIceForWater.desc": "Создаёт источники воды методом «разместить лёд → разрушить лёд» для печати источников воды.",
+  "litematica-printer.config.printNearestFirst": "Сначала ближайшие цели",
+  "litematica-printer.config.printNearestFirst.desc": "По умолчанию включено. Сначала обрабатывать доступные цели ближе к игроку; при отключении использовать прежний порядок обхода по осям. Включённая группировка по типу блока сохраняет приоритет.",
   "litematica-printer.config.printIcePlacementWaitTicks": "Время подтверждения размещения льда",
   "litematica-printer.config.printIcePlacementWaitTicks.desc": "После запроса на размещение льда ждать не дольше указанного времени; немедленно повторить попытку, если блок в целевой позиции всё ещё можно заменить и лёд или вода не появились. По умолчанию: 10 тактов. Диапазон: 1–200 тактов.",
   "litematica-printer.config.printIceBreakWaitTicks": "Время подтверждения разрушения льда",

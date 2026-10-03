@@ -8,6 +8,7 @@ import me.aleksilassila.litematica.printer.enums.IterationOrderType;
 import me.aleksilassila.litematica.printer.enums.RadiusShapeType;
 import me.aleksilassila.litematica.printer.enums.SelectionType;
 import me.aleksilassila.litematica.printer.printer.PrinterBox;
+import me.aleksilassila.litematica.printer.printer.ScanOrder;
 import me.aleksilassila.litematica.printer.utils.ConfigUtils;
 import me.aleksilassila.litematica.printer.utils.LitematicaUtils;
 import me.aleksilassila.litematica.printer.utils.PlayerUtils;
@@ -18,6 +19,8 @@ import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.HashSet;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
 import java.util.PriorityQueue;
@@ -51,6 +54,7 @@ public class IteratorManager {
     @Nullable
     private PrinterBox lastBox;
     private boolean useSchematicCandidates;
+    private boolean nearestFirst;
 
     private boolean needsRebuild;
     private boolean dirtyIterator;
@@ -63,7 +67,8 @@ public class IteratorManager {
     /**
      * 根据玩家位置和配置重建 PrinterBox，返回是否需要重置扫描状态。
      */
-    public boolean tryBuildBox(LocalPlayer player, @Nullable Object selectionTypeObj, boolean needSchematic) {
+    public boolean tryBuildBox(LocalPlayer player, @Nullable Object selectionTypeObj, boolean needSchematic,
+                               boolean nearestFirst) {
         Vec3 currentEyePos = player.getEyePosition();
         double effectiveRange = ConfigUtils.getEffectiveRange();
         double refreshDistance = Configs.Core.SCAN_REFRESH_DISTANCE.getDoubleValue();
@@ -97,6 +102,11 @@ public class IteratorManager {
                 || layerAxis != lastLayerAxis
                 || layerMode != lastLayerMode
                 || selectionType != lastSelectionType
+                || this.nearestFirst != nearestFirst
+                || (box != null && (box.iterationMode != Configs.Core.ITERATION_ORDER.getOptionListValue()
+                    || box.xIncrement == Configs.Core.X_REVERSE.getBooleanValue()
+                    || box.yIncrement == Configs.Core.Y_REVERSE.getBooleanValue()
+                    || box.zIncrement == Configs.Core.Z_REVERSE.getBooleanValue()))
                 || useSchematicCandidates != this.useSchematicCandidates;
 
         // 范围筛选始终使用本 tick 的眼睛位置，不依赖扫描盒是否重建。
@@ -117,6 +127,7 @@ public class IteratorManager {
             lastLayerMode = layerMode;
             lastSelectionType = selectionType;
             this.useSchematicCandidates = useSchematicCandidates;
+            this.nearestFirst = nearestFirst;
 
             int minX = (int) Math.floor(player.getX() - effectiveRange);
             int maxX = (int) Math.ceil(player.getX() + effectiveRange);
@@ -236,6 +247,21 @@ public class IteratorManager {
     }
 
     private Iterator<BlockPos> createIterator() {
+        Iterator<BlockPos> candidates = createCoordinateIterator();
+        if (!nearestFirst) return candidates;
+        // 只对当前投影和可达范围内的位置排序，不在排序阶段读取方块或触发取物。
+        List<BlockPos> positions = new ArrayList<>();
+        while (candidates.hasNext()) {
+            BlockPos pos = candidates.next();
+            if (shapeType != null ? PlayerUtils.canInteracted(pos, eyePos, effectiveRange, shapeType)
+                    : PlayerUtils.canInteracted(pos)) positions.add(pos);
+        }
+        positions.sort(ScanOrder.nearest(eyePos,
+                ScanOrder.coordinates(box.iterationMode, box.xIncrement, box.yIncrement, box.zIncrement)));
+        return positions.iterator();
+    }
+
+    private Iterator<BlockPos> createCoordinateIterator() {
         if (!useSchematicCandidates) {
             return box.iterator();
         }
@@ -282,7 +308,9 @@ public class IteratorManager {
 
         private SchematicBoxIterator(List<PrinterBox> boxes) {
             PrinterBox order = boxes.get(0);
-            this.queue = new PriorityQueue<>((left, right) -> comparePositions(left.current, right.current, order));
+            Comparator<BlockPos> comparator = ScanOrder.coordinates(order.iterationMode,
+                    order.xIncrement, order.yIncrement, order.zIncrement);
+            this.queue = new PriorityQueue<>((left, right) -> comparator.compare(left.current, right.current));
             for (PrinterBox box : boxes) {
                 Iterator<BlockPos> iterator = box.iterator();
                 if (iterator.hasNext()) {
@@ -320,46 +348,6 @@ public class IteratorManager {
                     return;
                 }
             }
-        }
-
-        private static int comparePositions(BlockPos left, BlockPos right, PrinterBox order) {
-            return switch (order.iterationMode) {
-                case XYZ -> compareAxes(left, right, order, 0, 1, 2);
-                case XZY -> compareAxes(left, right, order, 0, 2, 1);
-                case YXZ -> compareAxes(left, right, order, 1, 0, 2);
-                case YZX -> compareAxes(left, right, order, 1, 2, 0);
-                case ZXY -> compareAxes(left, right, order, 2, 0, 1);
-                case ZYX -> compareAxes(left, right, order, 2, 1, 0);
-            };
-        }
-
-        private static int compareAxes(BlockPos left, BlockPos right, PrinterBox order,
-                                       int firstAxis, int secondAxis, int thirdAxis) {
-            int result = compareAxis(axisValue(left, firstAxis), axisValue(right, firstAxis), increment(order, firstAxis));
-            if (result != 0) return result;
-            result = compareAxis(axisValue(left, secondAxis), axisValue(right, secondAxis), increment(order, secondAxis));
-            if (result != 0) return result;
-            return compareAxis(axisValue(left, thirdAxis), axisValue(right, thirdAxis), increment(order, thirdAxis));
-        }
-
-        private static int axisValue(BlockPos pos, int axis) {
-            return switch (axis) {
-                case 0 -> pos.getX();
-                case 1 -> pos.getY();
-                default -> pos.getZ();
-            };
-        }
-
-        private static boolean increment(PrinterBox box, int axis) {
-            return switch (axis) {
-                case 0 -> box.xIncrement;
-                case 1 -> box.yIncrement;
-                default -> box.zIncrement;
-            };
-        }
-
-        private static int compareAxis(int left, int right, boolean increment) {
-            return increment ? Integer.compare(left, right) : Integer.compare(right, left);
         }
 
         private static final class Cursor {

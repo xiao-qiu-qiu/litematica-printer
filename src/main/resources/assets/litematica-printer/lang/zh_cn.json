@@ -192,6 +192,8 @@
   "litematica-printer.config.printForcedSneak.desc": "打印过程中自动保持潜行状态。",
   "litematica-printer.config.printIceForWater": "破冰放水",
   "litematica-printer.config.printIceForWater.desc": "通过“放置冰→破坏冰”的方式生成水源方块，实现水源的打印。",
+  "litematica-printer.config.printNearestFirst": "优先打印最近目标",
+  "litematica-printer.config.printNearestFirst.desc": "默认开启，优先处理距玩家最近的可处理目标；关闭时沿用原有坐标轴扫描顺序。启用方块分类时，仍优先按类型处理。",
   "litematica-printer.config.printIcePlacementWaitTicks": "放冰确认时间",
   "litematica-printer.config.printIcePlacementWaitTicks.desc": "放冰请求后最多等待设定时间；目标仍可替换且未出现冰或水时立即重试。默认 10 tick，可调范围 1–200 tick。",
   "litematica-printer.config.printIceBreakWaitTicks": "破冰确认时间",
