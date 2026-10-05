@@ -100,7 +100,7 @@ public final class IceForWaterBreakTask {
             BlockPos retryPos = pos;
             clear();
             BlockPosCooldownManager.INSTANCE.setCooldown(client.level, Print.NAME, retryPos,
-                    Print.WATER_RETRY_COOLDOWN_TICKS);
+                    Configs.Print.WATER_RETRY_COOLDOWN_TICKS.getIntegerValue());
             return;
         }
         // 发出 STOP 后保留任务，避免打印模块抢走工具或重复发包。

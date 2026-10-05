@@ -415,6 +415,12 @@ public class Configs extends ConfigBuilders implements IConfigHandler {
                 .setVisible(PRINT_ICE_FOR_WATER::getBooleanValue)
                 .build();
 
+        public static final ConfigInteger WATER_RETRY_COOLDOWN_TICKS = integerValue("printWaterRetryCooldownTicks")
+                .defaultValue(10)
+                .range(1, 200)
+                .setVisible(PRINT_ICE_FOR_WATER::getBooleanValue)
+                .build();
+
         // 自动去皮
         public static final ConfigBoolean STRIP_LOGS = booleanValue("printAutoStripLogs")
                 .defaultValue(false)
@@ -526,6 +532,7 @@ public class Configs extends ConfigBuilders implements IConfigHandler {
                 ICE_DIAGNOSTICS,
                 ICE_BREAK_WAIT_TICKS,
                 WATER_WAIT_TICKS,
+                WATER_RETRY_COOLDOWN_TICKS,
                 SAFELY_OBSERVER,
                 STRIP_LOGS,
                 NOTE_BLOCK_TUNING,

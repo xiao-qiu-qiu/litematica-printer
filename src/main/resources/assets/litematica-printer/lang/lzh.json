@@ -211,6 +211,8 @@
   "litematica-printer.config.printIceBreakWaitTicks.desc": "請告破冰畢後，候其確認；冰猶在，則復掘，不限實掘之久。預設十刻，可調一至二百刻。",
   "litematica-printer.config.printWaterWaitTicks": "生水候時",
   "litematica-printer.config.printWaterWaitTicks.desc": "冰既消，候水源或含水之塊；逾時則重察目標之態而復試。預設十刻，可調一至二百刻。",
+  "litematica-printer.config.printWaterRetryCooldownTicks": "破冰生水重試冷卻",
+  "litematica-printer.config.printWaterRetryCooldownTicks.desc": "確認連敗或掘冰之務逾時後，暫略此目標，候而復試。\n預設十遊戲刻，可調一至二百刻。置冰及終置含水方塊之重試，亦須守置方冷卻之下限。",
   "litematica-printer.config.printReplace": "覆印 - 開關",
   "litematica-printer.config.printReplace.desc": "直覆列表之方，不跳不破。",
   "litematica-printer.config.printReplaceCoral": "代死珊",

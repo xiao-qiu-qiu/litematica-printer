@@ -211,6 +211,8 @@
   "litematica-printer.config.printIceBreakWaitTicks.desc": "Wait for confirmation after requesting completion of ice breaking; resume mining if the ice remains. Does not limit the actual mining time. Default: 10 ticks. Range: 1–200 ticks.",
   "litematica-printer.config.printWaterWaitTicks": "Water Formation Wait Time",
   "litematica-printer.config.printWaterWaitTicks.desc": "After the ice disappears, wait for a water source or waterlogged block; on timeout, read the target state again and retry. Default: 10 ticks. Range: 1–200 ticks.",
+  "litematica-printer.config.printWaterRetryCooldownTicks": "Ice Breaking and Water Formation Retry Cooldown",
+  "litematica-printer.config.printWaterRetryCooldownTicks.desc": "After consecutive confirmation failures or an ice mining task timeout, temporarily skip the target before retrying.\nDefault: 10 game ticks. Range: 1–200 game ticks. Retries for ice placement and final waterlogged block placement are also subject to the minimum placement cooldown.",
   "litematica-printer.config.printReplace": "Overwrite Printing - Toggle",
   "litematica-printer.config.printReplace.desc": "Directly overwrite blocks in list without skipping processing or breaking.",
   "litematica-printer.config.printReplaceCoral": "Replace Dead Coral",

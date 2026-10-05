@@ -64,8 +64,6 @@ public class Print extends Module {
     @Getter @Setter
     private BlockPos watingForWaterPos;
 
-    // 挖掘看门狗及连续确认失败后的退避；单次超时仍立即重试。
-    public static final int WATER_RETRY_COOLDOWN_TICKS = 20;
     private long waterWaitStartedAt;
     private boolean waitingForIcePlacement;
     private int icePlacementAttempts;
@@ -255,7 +253,7 @@ public class Print extends Module {
             // 连续被服务端拒绝时让其他目标先执行，随后仍可重新扫描并重试。
             BlockPos retryPos = waterTarget;
             releaseWaterTarget();
-            setCooldown(retryPos, Math.max(WATER_RETRY_COOLDOWN_TICKS, ConfigUtils.getPlaceCooldown()));
+            setCooldown(retryPos, Math.max(Configs.Print.WATER_RETRY_COOLDOWN_TICKS.getIntegerValue(), ConfigUtils.getPlaceCooldown()));
         }
         // Module 刷新扫描范围后恢复当前目标；不让新进入范围的位置抢占半成品。
         if (waterTarget != null) enterWaiting(waterTarget);
@@ -462,7 +460,7 @@ public class Print extends Module {
                             && ++iceConfirmationFailures >= MAX_ICE_CONFIRMATION_FAILURES) {
                         diagnostics.record(blockPos, "yield_after_3_ice_timeouts", icePlacementAttempts, true);
                         releaseWaterTarget();
-                        setCooldown(blockPos, Math.max(WATER_RETRY_COOLDOWN_TICKS, ConfigUtils.getPlaceCooldown()));
+                        setCooldown(blockPos, Math.max(Configs.Print.WATER_RETRY_COOLDOWN_TICKS.getIntegerValue(), ConfigUtils.getPlaceCooldown()));
                         return; // Continue scanning other candidates; this position becomes eligible again later.
                     }
                     // 本轮 Action 已按最新世界状态生成；确认失败立即继续放置，不额外冷却。

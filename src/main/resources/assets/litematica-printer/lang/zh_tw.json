@@ -182,6 +182,8 @@
   "litematica-printer.config.printIceBreakWaitTicks.desc": "破冰完成請求後等待確認；冰仍在時重新挖掘，不限制實際挖掘耗時。預設 10 tick，可調範圍 1–200 tick。",
   "litematica-printer.config.printWaterWaitTicks": "出水等待時間",
   "litematica-printer.config.printWaterWaitTicks.desc": "冰消失後等待水源或含水方塊；逾時後重新讀取目標狀態並重試。預設 10 tick，可調範圍 1–200 tick。",
+  "litematica-printer.config.printWaterRetryCooldownTicks": "破冰放水重試冷卻",
+  "litematica-printer.config.printWaterRetryCooldownTicks.desc": "連續確認失敗或挖冰任務逾時後，暫時跳過該目標再重試。\n預設 10 tick，可調範圍 1–200 tick。放冰及最終含水方塊放置重試仍受放置冷卻下限限制。",
   "litematica-printer.config.printReplace": "覆蓋列印 - 開關",
   "litematica-printer.config.printReplace.desc": "直接覆蓋清單中的方塊，不會跳過處理或破壞。",
   "litematica-printer.config.printReplaceCoral": "代替死亡珊瑚",
