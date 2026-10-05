@@ -573,6 +573,8 @@ public class Print extends Module {
             retainWaterTarget(blockPos);
         }
         action.queueAction(blockPos, side, useShift, player);
+        ActionManager.INSTANCE.trackPlacement(blockPos,
+                placingIceForWater ? Blocks.ICE.defaultBlockState() : ctx.requiredState);
         // 放冰只发送请求；等服务器回传目标格确实是冰，再开始挖掘。
         if (placingIceForWater) {
             diagnostics.record(blockPos, "ice_request_queued", icePlacementAttempts, true);

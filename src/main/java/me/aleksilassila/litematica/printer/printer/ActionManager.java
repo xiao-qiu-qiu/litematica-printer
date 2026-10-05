@@ -12,6 +12,7 @@ import net.minecraft.core.Direction;
 
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.NotNull;
@@ -34,6 +35,10 @@ public class ActionManager {
     private Vec3 exactHit;
     @Nullable
     private Boolean queuedPrediction;
+    @Nullable
+    private BlockPos recoveryTarget;
+    @Nullable
+    private BlockState recoveryState;
     @Setter
     @Nullable
     private Runnable onSent;
@@ -68,6 +73,11 @@ public class ActionManager {
     public ActionManager sendQueue(LocalPlayer player) {
         return sendQueue(player, queuedPrediction != null ? queuedPrediction
                 : !Configs.Placement.PRINT_USE_PACKET.getBooleanValue());
+    }
+
+    public void trackPlacement(BlockPos pos, BlockState expected) {
+        this.recoveryTarget = pos.immutable();
+        this.recoveryState = expected;
     }
 
     public ActionManager sendQueue(LocalPlayer player, boolean localPrediction) {
@@ -126,7 +136,10 @@ public class ActionManager {
                     InteractionHand.MAIN_HAND, blockHitResult) != InteractionResult.FAIL;
             // 与原版右键放置保持顺序：先交互，再挥主手。
             // 纯发包模式返回 PASS，仍需挥手，不能依赖本地放置成功结果。
-            if (sent) player.swing(InteractionHand.MAIN_HAND);
+            if (sent && Configs.Placement.PLACE_SWING_HAND.getBooleanValue()) player.swing(InteractionHand.MAIN_HAND);
+            if (sent && recoveryTarget != null && recoveryState != null) {
+                PlacementRecoveryManager.INSTANCE.onSent(recoveryTarget, recoveryState, localPrediction);
+            }
             PlacementDelayManager.INSTANCE.onPlacement();
         }
         if (useShift && !wasSneak) {
@@ -161,6 +174,8 @@ public class ActionManager {
         this.hitModifier = null;
         this.exactHit = null;
         this.queuedPrediction = null;
+        this.recoveryTarget = null;
+        this.recoveryState = null;
         this.onSent = null;
         this.useShift = false;
         this.useProtocol = false;

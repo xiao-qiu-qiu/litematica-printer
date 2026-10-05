@@ -7,6 +7,7 @@ import me.aleksilassila.litematica.printer.config.Configs;
 import me.aleksilassila.litematica.printer.handler.ModuleManager;
 import me.aleksilassila.litematica.printer.printer.BlockPosCooldownManager;
 import me.aleksilassila.litematica.printer.printer.PlacementDelayManager;
+import me.aleksilassila.litematica.printer.printer.PlacementRecoveryManager;
 import me.aleksilassila.litematica.printer.utils.BreakUtils;
 import me.aleksilassila.litematica.printer.utils.LitematicaUtils;
 import me.aleksilassila.litematica.printer.utils.ModUtils;
@@ -69,7 +70,7 @@ public class MixinLocalPlayer extends AbstractClientPlayer {
         if (BreakUtils.INSTANCE.isNeedHandle()) {
             BreakUtils.INSTANCE.onTick();
         }
-        ModuleManager.tick();
+        if (!PlacementRecoveryManager.INSTANCE.tick()) ModuleManager.tick();
     }
 
     @Inject(method = "openTextEdit", at = @At("HEAD"), cancellable = true)

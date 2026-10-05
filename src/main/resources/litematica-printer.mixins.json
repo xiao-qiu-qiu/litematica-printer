@@ -25,6 +25,7 @@
     "mc.MixinClientPacketListener",
     "mc.MixinGui",
     "mc.MixinLocalPlayer",
+    "mc.MinecraftAttackInvoker",
     "mc.MixinMinecraft",
     "mc.MixinMultiPlayerGameMode"
   ],

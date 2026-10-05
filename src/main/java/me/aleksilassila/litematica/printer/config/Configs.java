@@ -203,6 +203,14 @@ public class Configs extends ConfigBuilders implements IConfigHandler {
                 .defaultValue(false)
                 .build();
 
+        public static final ConfigBoolean PLACE_SWING_HAND = booleanValue("placeSwingHand")
+                .defaultValue(false)
+                .build();
+
+        public static final ConfigBoolean PLACE_STUCK_ATTACK = booleanValue("placeStuckAttack")
+                .defaultValue(false)
+                .build();
+
         // 放置成功后的全局冷却
         public static final ConfigInteger PLACE_INTERVAL = integerValue("placeInterval")
                 .defaultValue(1)
@@ -234,6 +242,8 @@ public class Configs extends ConfigBuilders implements IConfigHandler {
 
         public static final ImmutableList<IConfigBase> OPTIONS = ImmutableList.of(
                 PRINT_USE_PACKET,
+                PLACE_SWING_HAND,
+                PLACE_STUCK_ATTACK,
                 PLACE_INTERVAL,
                 PLACE_BLOCKS_PER_TICK,
                 PLACE_COOLDOWN,
