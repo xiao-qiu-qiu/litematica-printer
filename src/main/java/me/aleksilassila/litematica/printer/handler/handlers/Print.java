@@ -64,10 +64,15 @@ public class Print extends Module {
     @Getter @Setter
     private BlockPos watingForWaterPos;
 
-    // 挖掘看门狗的退避；正常放冰/出水确认超时不额外冷却。
+    // 挖掘看门狗及连续确认失败后的退避；单次超时仍立即重试。
     public static final int WATER_RETRY_COOLDOWN_TICKS = 20;
     private long waterWaitStartedAt;
     private boolean waitingForIcePlacement;
+    private int icePlacementAttempts;
+    private int iceConfirmationFailures;
+    private static final int MAX_ICE_CONFIRMATION_FAILURES = 3;
+    private final IceWaterDiagnostics diagnostics = new IceWaterDiagnostics();
+    @Nullable private BlockPos diagnosticPos;
 
     // 完整含水打印任务独立于扫描游标；产水只结束等待阶段，不释放最终目标。
     @Nullable private BlockPos waterTarget;
@@ -123,6 +128,7 @@ public class Print extends Module {
         if (client.level != routeLevel) {
             routeLevel = client.level;
             averageCompletionTicks = -1;
+            diagnosticPos = null;
         }
         if (client.player == null || client.level == null || !ConfigUtils.isPrinterEnable()
                 || !Configs.Print.ENABLED.getBooleanValue()) {
@@ -156,6 +162,21 @@ public class Print extends Module {
     @Override
     protected void onDisabled() {
         if (waterTarget != null || watingForWaterPos != null) releaseWaterTarget();
+        diagnosticPos = null;
+    }
+
+    public void diagnoseWait(String reason) {
+        if (!ConfigUtils.isPrinterEnable() || !Configs.Print.ENABLED.getBooleanValue()) return;
+        if (waterTarget != null && waterTargetLevel != client.level) return;
+        diagnostics.record(waterTarget != null ? waterTarget : diagnosticPos, reason, icePlacementAttempts, false);
+    }
+
+    @Override
+    protected void onPlacementWait(BlockPos pos) {
+        if (Configs.Print.PRINT_ICE_FOR_WATER.getBooleanValue() && ctx != null && BlockUtils.needsWater(ctx.requiredState)) {
+            diagnosticPos = pos.immutable();
+            diagnoseWait("placement_or_inventory_delay");
+        }
     }
 
     /** 挖冰任务也调用此检查，确保暂停扫描时仍响应离开范围、换世界和投影变化。 */
@@ -176,6 +197,8 @@ public class Print extends Module {
         waterTargetState = ctx.requiredState;
         waterTargetLevel = level;
         waterTargetStartedAt = ModuleManager.getCurrentHandlerTime();
+        icePlacementAttempts = 0;
+        iceConfirmationFailures = 0;
         measureFullWaterTask = action instanceof PlaceIceForWaterAction && BlockUtils.isWaterlogged(ctx.requiredState);
         finalConfirmationUntil = 0;
         finalPlacementAttempts = 0;
@@ -190,6 +213,9 @@ public class Print extends Module {
         finalPlacementAttempts = 0;
         BreakUtils.INSTANCE.cancelIceBreak();
         clearWaterWait();
+        icePlacementAttempts = 0;
+        iceConfirmationFailures = 0;
+        diagnosticPos = null;
     }
 
     private boolean skipWaterTarget(BlockPos pos) {
@@ -217,6 +243,7 @@ public class Print extends Module {
                 }
             }
             if (!valid || complete) {
+                diagnostics.record(waterTarget, complete ? "target_complete" : "target_invalid", icePlacementAttempts, true);
                 if (!complete && waterTargetLevel == level && !PlayerUtils.canInteracted(waterTarget)) {
                     warnIfRouteTooFast(waterTarget);
                 }
@@ -235,11 +262,17 @@ public class Print extends Module {
         // 正确方块会在 needsWork 中提前跳过，必须在筛选前清理已完成的等水状态。
         if (watingForWaterPos == null) return;
         BlockState current = level.getBlockState(watingForWaterPos);
+        if (BlockUtils.isWaterSource(current) || BlockUtils.isWaterlogged(current)) {
+            diagnostics.record(watingForWaterPos, "water_observed", icePlacementAttempts, true);
+            iceConfirmationFailures = 0;
+        }
         if (!Configs.Print.PRINT_ICE_FOR_WATER.getBooleanValue()
                 || BlockUtils.isWaterSource(current) || BlockUtils.isWaterlogged(current)
                 || (!current.is(Blocks.ICE) && !BlockUtils.isReplaceable(current))) {
             clearWaterWait();
         } else if (waitingForIcePlacement && current.is(Blocks.ICE)) {
+            diagnostics.record(watingForWaterPos, "ice_confirmed", icePlacementAttempts, true);
+            iceConfirmationFailures = 0;
             waitingForIcePlacement = false;
             waterWaitStartedAt = ModuleManager.getCurrentHandlerTime();
         }
@@ -254,6 +287,7 @@ public class Print extends Module {
     /** 冰已消失后才开始计出水等待时间，不把挖掘耗时计入其中。 */
     public void onIceBroken(BlockPos pos) {
         if (pos.equals(watingForWaterPos)) {
+            diagnostics.record(pos, "ice_gone_waiting_for_water", icePlacementAttempts, true);
             waitingForIcePlacement = false;
             waterWaitStartedAt = ModuleManager.getCurrentHandlerTime();
         }
@@ -380,7 +414,13 @@ public class Print extends Module {
 
     @Override
     protected void executeIteration(BlockPos blockPos, AtomicReference<Boolean> skipIteration) {
+        if (Configs.Print.PRINT_ICE_FOR_WATER.getBooleanValue() && BlockUtils.needsWater(ctx.requiredState)) {
+            diagnosticPos = blockPos.immutable();
+        } else {
+            diagnosticPos = null;
+        }
         if (waitingForMaterials) {
+            diagnoseWait("waiting_for_materials");
             enterWaiting(blockPos);
             skipIteration.set(true);
             return;
@@ -407,6 +447,7 @@ public class Print extends Module {
                     // 水已生成：走下方正常放置流程，放置含水方块（buildAction 已返回对应 Action）
                 }
                 case KEEP_WAITING -> {
+                    diagnoseWait(waitingForIcePlacement ? "waiting_for_ice_confirmation" : "waiting_for_water_or_break");
                     if (isIce) {
                         ensureIceBreakQueued(blockPos);
                     }
@@ -415,6 +456,15 @@ public class Print extends Module {
                     return;
                 }
                 case WAIT_TIMEOUT -> {
+                    diagnostics.record(blockPos, waitingForIcePlacement ? "ice_confirmation_timeout" : "water_confirmation_timeout",
+                            icePlacementAttempts, true);
+                    if (waitingForIcePlacement && !isIce && !matchesWaterRequest
+                            && ++iceConfirmationFailures >= MAX_ICE_CONFIRMATION_FAILURES) {
+                        diagnostics.record(blockPos, "yield_after_3_ice_timeouts", icePlacementAttempts, true);
+                        releaseWaterTarget();
+                        setCooldown(blockPos, Math.max(WATER_RETRY_COOLDOWN_TICKS, ConfigUtils.getPlaceCooldown()));
+                        return; // Continue scanning other candidates; this position becomes eligible again later.
+                    }
                     // 本轮 Action 已按最新世界状态生成；确认失败立即继续放置，不额外冷却。
                     clearWaterWait();
                     BreakUtils.INSTANCE.cancelIceBreak();
@@ -472,17 +522,20 @@ public class Print extends Module {
         // 检查是否有待交换的物品
         if (RemoteContainerUtils.hasPendingExchange() || QuickShulkerUtils.isOpenHandler()
                 || TakeItOutCompat.isAwaitingItem()) {
+            diagnoseWait("waiting_for_inventory_provider");
             enterWaiting(blockPos);
             skipIteration.set(true);
             return;
         }
         Direction side = action.getValidSide(level, blockPos);
         if (side == null) {
+            diagnostics.record(diagnosticPos, "no_valid_side", icePlacementAttempts, true);
             addHighlight(blockPos, HighlightType.FAILED);
             skipWaterTarget(blockPos);
             return;
         }
         if (!InventoryUtils.switchToItems(player, reqItems)) {
+            diagnoseWait("item_selection_failed");
             if (QuickShulkerUtils.isOpenHandler()) {
                 enterWaiting(blockPos);
                 skipIteration.set(true);
@@ -500,6 +553,7 @@ public class Print extends Module {
             return;
         }
         if (PlacementDelayManager.INSTANCE.wasInventoryOperationThisTick()) {
+            diagnoseWait("item_switched_waiting_for_delay");
             enterWaiting(blockPos);
             skipIteration.set(true);
             return;
@@ -521,9 +575,20 @@ public class Print extends Module {
         action.queueAction(blockPos, side, useShift, player);
         // 放冰只发送请求；等服务器回传目标格确实是冰，再开始挖掘。
         if (placingIceForWater) {
+            diagnostics.record(blockPos, "ice_request_queued", icePlacementAttempts, true);
+            ActionManager.INSTANCE.setOnSent(() -> {
+                if (blockPos.equals(waterTarget)) {
+                    icePlacementAttempts++;
+                    diagnostics.record(blockPos, "ice_request_dispatched", icePlacementAttempts, true);
+                }
+            });
             ActionManager.INSTANCE.setLook(action.getPlayerLook());
             ActionManager.INSTANCE.setNeedWaitModifyLookFromAction(action.getNeedWaitModifyLook());
+            int requestsBeforeSend = icePlacementAttempts;
             ActionManager.INSTANCE.sendQueue(player, false);
+            if (icePlacementAttempts == requestsBeforeSend) {
+                diagnostics.record(blockPos, "ice_request_not_dispatched", icePlacementAttempts, true);
+            }
             watingForWaterPos = blockPos.immutable();
             waterWaitStartedAt = ModuleManager.getCurrentHandlerTime();
             waitingForIcePlacement = true;
@@ -544,6 +609,7 @@ public class Print extends Module {
             ActionManager.INSTANCE.setOnSent(() -> {
                 if (blockPos.equals(waterTarget)) {
                     finalPlacementAttempts++;
+                    diagnostics.record(blockPos, "final_block_request_dispatched", icePlacementAttempts, true);
                     finalConfirmationUntil = ModuleManager.getCurrentHandlerTime()
                             + Configs.Print.WATER_WAIT_TICKS.getIntegerValue();
                 }

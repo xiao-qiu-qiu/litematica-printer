@@ -383,6 +383,10 @@ public class Configs extends ConfigBuilders implements IConfigHandler {
                 .setVisible(PRINT_ICE_FOR_WATER::getBooleanValue)
                 .build();
 
+        public static final ConfigBoolean ICE_DIAGNOSTICS = booleanValue("printIceDiagnostics")
+                .defaultValue(false)
+                .build();
+
         public static final ConfigInteger ICE_BREAK_WAIT_TICKS = integerValue("printIceBreakWaitTicks")
                 .defaultValue(10)
                 .range(1, 200)
@@ -503,6 +507,7 @@ public class Configs extends ConfigBuilders implements IConfigHandler {
                 SKIP_WATERLOGGED_BLOCK,
                 PRINT_ICE_FOR_WATER,
                 ICE_PLACEMENT_WAIT_TICKS,
+                ICE_DIAGNOSTICS,
                 ICE_BREAK_WAIT_TICKS,
                 WATER_WAIT_TICKS,
                 SAFELY_OBSERVER,

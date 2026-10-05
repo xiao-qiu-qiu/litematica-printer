@@ -192,6 +192,8 @@
   "litematica-printer.config.printForcedSneak.desc": "印時自保潛行。",
   "litematica-printer.config.printIceForWater": "破冰生水",
   "litematica-printer.config.printIceForWater.desc": "以「置冰→破冰」生水源，以印水。",
+  "litematica-printer.config.printIceDiagnostics": "破冰放水診斷日誌",
+  "litematica-printer.config.printIceDiagnostics.desc": "預設關閉。錄破冰放水之處理階段、發包次數、手持之物及確認逾時於遊戲 logs/latest.log，以察卡滯。",
   "litematica-printer.config.printOrderMode": "印序",
   "litematica-printer.config.printOrderMode.desc": "預設沿途收尾為先，循實際行向先竟身後之方塊；當前目標既竟乃易，暫駐仍存其向。若啟按類分塊，仍依類處之。",
   "litematica-printer.config.printOrder.route": "沿途收尾為先",

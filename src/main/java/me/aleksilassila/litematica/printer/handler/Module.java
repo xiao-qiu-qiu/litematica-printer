@@ -150,6 +150,7 @@ public abstract class Module extends ConfigUtils {
 
     private void executeWithPlacementDelay(BlockPos pos) {
         if (isPlacementModule() && PlacementDelayManager.INSTANCE.isWaitingForPlacement()) {
+            onPlacementWait(pos);
             enterWaiting(pos);
             skipIteration.set(true);
             return;
@@ -345,6 +346,8 @@ public abstract class Module extends ConfigUtils {
     protected boolean shouldKeepWaiting(BlockPos pos) {
         return false;
     }
+
+    protected void onPlacementWait(BlockPos pos) {}
 
     protected int getMaxExecutions() {
         return -1;

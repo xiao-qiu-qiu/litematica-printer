@@ -48,7 +48,10 @@ public class ModuleManager {
             PlacementDelayManager.INSTANCE.onInventoryOperation();
         }
         takeItOutAwaiting = awaitingItem;
-        if (awaitingItem) return;
+        if (awaitingItem) {
+            PRINT.diagnoseWait("global_take_it_out_wait");
+            return;
+        }
 
         QuickShulkerUtils.tick();
         if (ModUtils.isRemoteInventoryNextLoaded()) {
@@ -66,11 +69,13 @@ public class ModuleManager {
         MissingMaterialTracker.getInstance().startCycle();
 
         if (ActionManager.INSTANCE.sendQueue(mc.player).needWaitModifyLook) {
+            PRINT.diagnoseWait("global_rotation_wait");
             return;
         }
 
         if (Configs.Core.LAG_CHECK.getBooleanValue()) {
             if (packetTick > Configs.Core.LAG_CHECK_MAX.getIntegerValue()) {
+                PRINT.diagnoseWait("global_lag_wait");
                 return;
             }
             packetTick++;
@@ -79,6 +84,7 @@ public class ModuleManager {
         for (Module module : VALUES) {
             if (!(module instanceof GUI)) {
                 if (BreakUtils.INSTANCE.isNeedHandle()) {
+                    PRINT.diagnoseWait("global_break_task");
                     return;
                 }
                 if (ActionManager.INSTANCE.needWaitModifyLook) {

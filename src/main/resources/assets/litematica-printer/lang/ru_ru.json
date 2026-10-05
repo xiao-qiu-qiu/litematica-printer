@@ -192,6 +192,8 @@
   "litematica-printer.config.printForcedSneak.desc": "Автоматически поддерживать состояние приседания во время печати.",
   "litematica-printer.config.printIceForWater": "Разрушать лёд для воды",
   "litematica-printer.config.printIceForWater.desc": "Создаёт источники воды методом «разместить лёд → разрушить лёд» для печати источников воды.",
+  "litematica-printer.config.printIceDiagnostics": "Журнал диагностики получения воды изо льда",
+  "litematica-printer.config.printIceDiagnostics.desc": "По умолчанию выключен. Записывает этапы обработки, количество отправленных пакетов, предметы в руке и тайм-ауты подтверждения в игровой журнал logs/latest.log для диагностики зависаний при получении воды изо льда.",
   "litematica-printer.config.printOrderMode": "Порядок печати",
   "litematica-printer.config.printOrderMode.desc": "По умолчанию — завершение по пути. Сначала завершаются блоки позади по фактическому направлению движения; текущая цель завершается до смены, а при коротких остановках направление сохраняется. При включённой группировке блоки по-прежнему обрабатываются по типу.",
   "litematica-printer.config.printOrder.route": "Сначала завершать по пути",
