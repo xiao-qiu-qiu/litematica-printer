@@ -88,6 +88,7 @@ public class ModuleManager {
                     return;
                 }
                 if (ActionManager.INSTANCE.needWaitModifyLook) {
+                    PRINT.diagnoseWait("global_rotation_wait");
                     return;
                 }
             }
