@@ -31,6 +31,10 @@ public final class PlacementDelayManager {
         return placementCooldown > 0 || inventoryCooldown > 0;
     }
 
+    public boolean isWaitingForInventory() {
+        return inventoryCooldown > 0;
+    }
+
     public void onPlacement() {
         placementCooldown = Math.max(placementCooldown, Configs.Placement.PLACE_INTERVAL.getIntegerValue());
     }

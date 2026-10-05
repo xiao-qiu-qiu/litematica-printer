@@ -1,5 +1,6 @@
 package me.aleksilassila.litematica.printer.printer;
 
+import fi.dy.masa.malilib.interfaces.IClientTickHandler;
 import me.aleksilassila.litematica.printer.Reference;
 import me.aleksilassila.litematica.printer.config.Configs;
 import me.aleksilassila.litematica.printer.handler.ModuleManager;
@@ -26,11 +27,11 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /** Only dispatched print requests count; scan, material and support waits never trigger clicks. */
-public final class PlacementRecoveryManager {
+public final class PlacementRecoveryManager implements IClientTickHandler {
     public static final PlacementRecoveryManager INSTANCE = new PlacementRecoveryManager();
     private static final int CONFIRM_TICKS = 10;
     private static final int MIN_ATTEMPTS = 3;
-    private static final int RECOVERY_INTERVAL = 20;
+    private static final int RECENT_REQUEST_TICKS = 20;
     private static final int EXPIRY_TICKS = 200;
     private static final int MAX_PENDING = 256;
     private final Map<BlockPos, Pending> pending = new LinkedHashMap<>();
@@ -66,18 +67,18 @@ public final class PlacementRecoveryManager {
         request.lastSent = now;
     }
 
-    /** True reserves this module tick for recovery; normal placement resumes next tick. */
-    public boolean tick() {
-        Minecraft mc = Minecraft.getInstance();
+    /** Run after movement and client-tick-end packets, matching Tweakeroo's periodic click phase. */
+    @Override
+    public void onClientTick(Minecraft mc) {
         if (!enabled() || mc.level == null || mc.player == null || mc.gameMode == null) {
             reset(null);
-            return false;
+            return;
         }
         if (level.get() != mc.level) reset(mc.level);
         long now = ModuleManager.getCurrentHandlerTime();
         // Give local placement prediction time to be confirmed or rolled back before dropping a request.
         pending.entrySet().removeIf(entry -> now - entry.getValue().lastSent > EXPIRY_TICKS
-                || ((!entry.getValue().localPrediction || now - entry.getValue().firstSent >= CONFIRM_TICKS)
+                || ((!entry.getValue().localPrediction || now - entry.getValue().lastSent >= CONFIRM_TICKS)
                 && mc.level.getBlockState(entry.getKey()).equals(entry.getValue().expected)));
         if (pending.isEmpty() || now < nextRecoveryTick || mc.screen != null
                 || mc.player.isUsingItem() || mc.player.isHandsBusy()
@@ -88,13 +89,15 @@ public final class PlacementRecoveryManager {
                 //#endif
                 || ((MultiPlayerGameModeExtension) mc.gameMode).litematica_printer$isDestroying()
                 || BreakUtils.INSTANCE.isNeedHandle()
-                || PlacementDelayManager.INSTANCE.isWaitingForPlacement()
-                || ActionManager.INSTANCE.target != null) return false;
+                || PlacementDelayManager.INSTANCE.isWaitingForInventory()
+                || ActionManager.INSTANCE.target != null) return;
 
         for (Map.Entry<BlockPos, Pending> entry : pending.entrySet()) {
             Pending request = entry.getValue();
             if (request.attempts < MIN_ATTEMPTS || now - request.firstSent < CONFIRM_TICKS
-                    || now - request.lastSent > RECOVERY_INTERVAL || !PlayerUtils.canInteracted(entry.getKey())) continue;
+                    || now - request.lastSent > RECENT_REQUEST_TICKS
+                    || mc.level.getBlockState(entry.getKey()).equals(request.expected)
+                    || !PlayerUtils.canInteracted(entry.getKey())) continue;
             // Run vanilla's MISS branch, including its attack/swap timers, without targeting nearby blocks/entities.
             HitResult originalHit = mc.hitResult;
             Vec3 miss = mc.player.getEyePosition().add(mc.player.getViewVector(1.0F).scale(5.0));
@@ -104,16 +107,15 @@ public final class PlacementRecoveryManager {
             } finally {
                 mc.hitResult = originalHit;
             }
-            nextRecoveryTick = now + RECOVERY_INTERVAL;
-            request.attempts = 0;
-            request.firstSent = now;
+            int interval = Configs.Placement.PLACE_STUCK_ATTACK_INTERVAL.getIntegerValue();
+            nextRecoveryTick = now + interval;
+            // Keep retrying a stuck target at the selected cadence; completion/expiry clears it above.
             if (Configs.Print.ICE_DIAGNOSTICS.getBooleanValue()) {
-                Reference.LOGGER.info("[PlacementRecovery] tick={} pos={} action=vanilla_air_click",
-                        now, entry.getKey().toShortString());
+                Reference.LOGGER.info("[PlacementRecovery] tick={} pos={} action=vanilla_air_click_tick_end interval={}",
+                        now, entry.getKey().toShortString(), interval);
             }
-            return true;
+            return;
         }
-        return false;
     }
 
     private static final class Pending {

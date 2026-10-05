@@ -211,6 +211,11 @@ public class Configs extends ConfigBuilders implements IConfigHandler {
                 .defaultValue(false)
                 .build();
 
+        public static final ConfigInteger PLACE_STUCK_ATTACK_INTERVAL = integerValue("placeStuckAttackInterval")
+                .defaultValue(5)
+                .range(1, 100)
+                .build();
+
         // 放置成功后的全局冷却
         public static final ConfigInteger PLACE_INTERVAL = integerValue("placeInterval")
                 .defaultValue(1)
@@ -244,6 +249,7 @@ public class Configs extends ConfigBuilders implements IConfigHandler {
                 PRINT_USE_PACKET,
                 PLACE_SWING_HAND,
                 PLACE_STUCK_ATTACK,
+                PLACE_STUCK_ATTACK_INTERVAL,
                 PLACE_INTERVAL,
                 PLACE_BLOCKS_PER_TICK,
                 PLACE_COOLDOWN,
