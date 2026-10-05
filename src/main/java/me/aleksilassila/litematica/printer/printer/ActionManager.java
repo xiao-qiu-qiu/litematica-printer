@@ -124,6 +124,9 @@ public class ActionManager {
             BlockHitResult blockHitResult = new BlockHitResult(hitVec, side, target, false);
             sent = gameModeExtension.litematica_printer$useItemOn(localPrediction,
                     InteractionHand.MAIN_HAND, blockHitResult) != InteractionResult.FAIL;
+            // 与原版右键放置保持顺序：先交互，再挥主手。
+            // 纯发包模式返回 PASS，仍需挥手，不能依赖本地放置成功结果。
+            if (sent) player.swing(InteractionHand.MAIN_HAND);
             PlacementDelayManager.INSTANCE.onPlacement();
         }
         if (useShift && !wasSneak) {
