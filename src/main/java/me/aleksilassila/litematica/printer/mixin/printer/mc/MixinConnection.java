@@ -3,6 +3,9 @@ package me.aleksilassila.litematica.printer.mixin.printer.mc;
 import me.aleksilassila.litematica.printer.config.Configs;
 import me.aleksilassila.litematica.printer.handler.ModuleManager;
 import me.aleksilassila.litematica.printer.utils.ConfigUtils;
+//#if MC >= 260100
+import me.aleksilassila.litematica.printer.printer.IceWaterDiagnostics;
+//#endif
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.network.Connection;
@@ -17,6 +20,13 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Environment(EnvType.CLIENT)
 @Mixin(Connection.class)
 public class MixinConnection {
+    //#if MC >= 260100
+    @Inject(method = "send(Lnet/minecraft/network/protocol/Packet;)V", at = @At("HEAD"))
+    private void traceIceWaterPacket(Packet<?> packet, CallbackInfo ci) {
+        IceWaterDiagnostics.recordOutgoing(packet);
+    }
+    //#endif
+
     @Inject(method = "genericsFtw", at = @At("HEAD"), require = 1)
     private static void hookGenericsFtw(Packet<?> packet, PacketListener packetListener, CallbackInfo ci) {
         if (ConfigUtils.isPrinterEnable()) {
